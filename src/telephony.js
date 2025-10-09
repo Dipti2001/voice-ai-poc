@@ -17,24 +17,15 @@ const client = twilio(config.twilio.accountSid, config.twilio.authToken);
  * @param {string} url URL of your webhook that returns TwiML.
  * @returns {Promise<object>} The Twilio call resource.
  */
-export async function placeCall(to, url) {
-  console.log('Attempting to place call:', { to, from: config.twilio.phoneNumber, url });
-  try {
-    const call = await client.calls.create({
-      to,
-      from: config.twilio.phoneNumber,
-      url
-    });
-    console.log('Call placed successfully:', call.sid);
-    return call;
-  } catch (error) {
-    console.error('Failed to place call:', error.message);
-    throw error;
-  }
+export function placeCall(to, url) {
+  return client.calls.create({
+    to,
+    from: config.twilio.phoneNumber,
+    url
+  });
 }
 
 /**
- * Build a basic TwiML response for inbound calls.  This helper uses
  * Twilio's `<Say>` verb to read out a message and then ends the call.  For
  * interactive calls you would instead return a `<Connect><Stream>` verb to
  * pipe the audio to your application for AI processing via websockets.
@@ -42,53 +33,33 @@ export async function placeCall(to, url) {
  * @param {string} message The message to speak to the caller.
  * @returns {string} The XML string Twilio will execute.
  */
-export function buildSayResponse(message) {
-  try {
-    const twiml = new twilio.twiml.VoiceResponse();
-    
-    // Add pause at the start for better timing
-    twiml.pause({ length: 1 });
-    
-    // Split long messages into smaller chunks with pauses
-    const chunks = message.match(/.{1,250}(?:\s|$)/g) || [message];
-    chunks.forEach((chunk, index) => {
-      if (index > 0) twiml.pause({ length: 0.5 });
-      twiml.say({ 
-        voice: 'alice', 
-        language: 'en-US',
-        rate: '0.9' // Slightly slower for better clarity
-      }, chunk.trim());
-    });
-    
-    // Add a pause before gathering user input
-    twiml.pause({ length: 1 });
-    
-    // Add gather for user input
-    const gather = twiml.gather({
-      input: 'speech',
-      action: '/voice/inbound',
-      method: 'POST',
-      speechTimeout: 'auto',
-      language: 'en-US'
-    });
-    
-    // Fallback if no input received
-    twiml.say({ 
-      voice: 'alice', 
-      language: 'en-US' 
-    }, 'I didn\'t hear anything. Please call back if you\'d like to continue the conversation.');
-    
-    twiml.hangup();
-    
-    const response = twiml.toString();
-    console.log('Generated TwiML:', response);
-    return response;
-  } catch (err) {
-    console.error('Error building TwiML:', err);
-    // Return a simple error response if TwiML generation fails
-    const fallback = new twilio.twiml.VoiceResponse();
-    fallback.say('I apologize, but I encountered a technical issue. Please try again in a moment.');
-    fallback.hangup();
-    return fallback.toString();
+export function buildSayResponse(message, audioUrl = null) {
+  const twiml = new twilio.twiml.VoiceResponse();
+  
+  // Start recording for Deepgram ASR
+  twiml.start();
+  
+  // Connect a stream for real-time audio processing
+  const connect = twiml.connect();
+  connect.stream({
+    url: `${config.app.baseUrl}/voice/stream`,
+    trackDuplicates: true
+  });
+  
+  if (audioUrl) {
+    // Play the Deepgram synthesized audio
+    twiml.play(audioUrl);
   }
+  
+  // Add gather for capturing the response
+  const gather = twiml.gather({
+    input: 'speech',
+    action: '/voice/inbound',
+    method: 'POST',
+    timeout: 3,
+    speechTimeout: 'auto'
+  });
+  
+  twiml.hangup();
+  return twiml.toString();
 }

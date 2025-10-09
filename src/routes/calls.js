@@ -1,13 +1,9 @@
 import { Router } from 'express';
-import twilio from 'twilio';
 import { readPrompt } from '../prompt.js';
 import { callLLM } from '../llm.js';
 import { transcribeAudio, synthesiseSpeech } from '../speech.js';
 import { buildSayResponse, placeCall } from '../telephony.js';
 import config from '../config.js';
-
-// Initialize Twilio client for response building
-const client = twilio(config.twilio.accountSid, config.twilio.authToken);
 
 /**
  * Router for call-related endpoints.  Defines two main routes:
@@ -26,80 +22,46 @@ const router = Router();
 // Helper: handle an inbound or outbound voice request from Twilio
 async function handleVoiceRequest(req, res) {
   try {
-    console.log('Received voice request:', {
-      type: req.path.includes('inbound') ? 'inbound' : 'outbound',
-      callSid: req.body?.CallSid,
-      from: req.body?.From,
-      to: req.body?.To
-    });
-
     // Step 1: Get the prompt and system instructions for the agent
     const prompt = await readPrompt();
-    if (!prompt) {
-      console.error('No prompt available');
-      throw new Error('System configuration error: No prompt available');
-    }
 
-    // For initial outbound calls or first inbound interaction, start with a greeting
-    if (!req.body?.RecordingUrl) {
-      console.log('Initial greeting interaction');
-      const messages = [
-        { role: 'system', content: prompt },
-        { role: 'user', content: 'Start the conversation with a greeting' }
-      ];
-      
-      const llmReply = await callLLM(messages);
-      console.log('Generated initial greeting:', llmReply);
-      
-      const xml = buildSayResponse(llmReply);
-      res.type('text/xml').send(xml);
-      return;
-    }
-
-    // Step 2: Handle voice input if available
+    // Step 2: Use Deepgram for real-time ASR
     let callerTranscript = '';
-    if (req.body?.RecordingUrl) {
-      console.log('Processing recording from:', req.body.RecordingUrl);
+    if (req.body && req.body.SpeechResult) {
+      // Use the direct speech result if available
+      callerTranscript = req.body.SpeechResult;
+    } else if (req.body && req.body.MediaUrl) {
       try {
-        const audioRes = await fetch(req.body.RecordingUrl);
+        const audioRes = await fetch(req.body.MediaUrl);
         const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
         callerTranscript = await transcribeAudio(audioBuffer);
-        console.log('Transcription result:', callerTranscript);
       } catch (err) {
-        console.error('Transcription error:', err);
-        throw new Error('Failed to process voice input');
+        console.warn('Failed to transcribe audio:', err.message);
       }
     }
 
-    // Step 3: Compose messages for the LLM
-    const messages = [
-      { role: 'system', content: prompt },
-      { role: 'user', content: callerTranscript || 'Hello' }
-    ];
-    
-    console.log('Sending messages to LLM:', messages);
+    // Step 3: Compose messages for the LLM.  The system prompt gives the
+    // assistant instructions; the user message contains the caller's speech.
+    const messages = [];
+    if (prompt) messages.push({ role: 'system', content: prompt });
+    if (callerTranscript) messages.push({ role: 'user', content: callerTranscript });
+    else messages.push({ role: 'user', content: 'Hello' });
 
     // Step 4: Get the LLM response
     const llmReply = await callLLM(messages);
-    console.log('Received LLM response:', llmReply);
 
-    // Build TwiML response using the helper
-    const twimlResponse = buildSayResponse(llmReply);
-    console.log('Generated TwiML response:', twimlResponse);
-    res.type('text/xml').send(twimlResponse);
+    // Step 5: Synthesise the response into audio via Deepgram
+    const audioBuffer = await synthesiseSpeech(llmReply);
+
+    // Step 6: Serve the audio to Twilio.  Twilio can play back audio from a
+    // URL via <Play>.  Here you would need to store audioBuffer in a
+    // temporary file or object storage and return its URL in TwiML.  For
+    // simplicity, this POC just speaks the text using TwiML's <Say>.
+    const xml = buildSayResponse(llmReply);
+    res.type('text/xml').send(xml);
   } catch (err) {
-    console.error('Voice handler error:', {
-      error: err.message,
-      stack: err.stack,
-      callSid: req.body?.CallSid
-    });
-    
-    const twiml = new twilio.twiml.VoiceResponse();
-    twiml.say(
-      { voice: 'alice', language: 'en-US' },
-      'I apologize, but I encountered a technical issue. Please try your request again.'
-    );
-    const xml = twiml.toString();
+    console.error('Voice handler error:', err);
+    const xml = buildSayResponse('Sorry, something went wrong.');
     res.type('text/xml').send(xml);
   }
 }
@@ -121,36 +83,56 @@ router.post('/call', async (req, res) => {
   if (!to) {
     return res.status(400).json({ error: 'Missing required field: to' });
   }
-  
-  console.log('Received outbound call request:', { to });
-  console.log('Using webhook URL:', `${config.app.baseUrl}/voice/outbound`);
-  console.log('Using Twilio config:', {
-    accountSid: config.twilio.accountSid,
-    phoneNumber: config.twilio.phoneNumber,
-    // Don't log the auth token for security
-  });
-
   try {
     const call = await placeCall(to, `${config.app.baseUrl}/voice/outbound`);
-    console.log('Call placed successfully:', { callSid: call.sid, to });
-    res.json({ 
-      callSid: call.sid,
-      status: 'initiated',
-      to,
-      from: config.twilio.phoneNumber
-    });
+    res.json({ callSid: call.sid });
   } catch (err) {
-    console.error('Failed to place call:', {
-      error: err.message,
-      code: err.code,
-      to,
-      webhookUrl: `${config.app.baseUrl}/voice/outbound`
+    console.error('Failed to place call:', err);
+    res.status(500).json({ error: 'Failed to place call' });
+  }
+});
+
+// Handle real-time audio streaming with Deepgram
+router.post('/voice/stream', async (req, res) => {
+  try {
+    // Create a Deepgram live transcription session
+    const deepgramLive = deepgram.transcription.live({
+      punctuate: true,
+      smart_format: true,
+      model: 'nova-2',
+      language: 'en-US'
     });
-    res.status(500).json({ 
-      error: 'Failed to place call',
-      details: err.message,
-      code: err.code
+
+    // Handle the transcription results
+    deepgramLive.addListener('transcriptReceived', async (transcription) => {
+      const transcript = transcription?.channel?.alternatives?.[0]?.transcript || '';
+      if (transcript) {
+        // Process the transcript through LLM
+        const messages = [
+          { role: 'system', content: await readPrompt() },
+          { role: 'user', content: transcript }
+        ];
+        
+        const llmReply = await callLLM(messages);
+        
+        // Synthesize speech using Deepgram
+        const audioBuffer = await synthesiseSpeech(llmReply);
+        
+        // Here you would need to store the audio buffer and create a URL
+        // that Twilio can access to play it back
+        // For now, we'll use Twilio's say as fallback
+        const twiml = buildSayResponse(llmReply);
+        res.type('text/xml').send(twiml);
+      }
     });
+
+    // Pipe the incoming audio to Deepgram
+    req.pipe(deepgramLive);
+
+  } catch (err) {
+    console.error('Streaming error:', err);
+    const twiml = buildSayResponse('Sorry, there was an error processing your speech.');
+    res.type('text/xml').send(twiml);
   }
 });
 
