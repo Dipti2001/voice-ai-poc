@@ -22,53 +22,91 @@ const router = Router();
 // Helper: handle an inbound or outbound voice request from Twilio
 async function handleVoiceRequest(req, res) {
   try {
+    console.log('Received voice request:', {
+      type: req.path.includes('inbound') ? 'inbound' : 'outbound',
+      callSid: req.body?.CallSid,
+      from: req.body?.From,
+      to: req.body?.To
+    });
+
     // Step 1: Get the prompt and system instructions for the agent
     const prompt = await readPrompt();
+    if (!prompt) {
+      console.error('No prompt available');
+      throw new Error('System configuration error: No prompt available');
+    }
 
-    // Step 2: Extract the caller's speech from Twilio.  In a real
-    // implementation with Twilio <Stream> you would process audio in real
-    // time.  For simplicity, we use the optional RecordingUrl provided by
-    // Twilio when you set record="true" on the <Dial> or <Record> verb.  This
-    // POC expects that Twilio has recorded the caller and sent a URL in
-    // req.body.RecordingUrl.  If none is available, we just send the
-    // initial prompt to the LLM.
+    // For initial outbound calls or first inbound interaction, start with a greeting
+    if (!req.body?.RecordingUrl) {
+      console.log('Initial greeting interaction');
+      const messages = [
+        { role: 'system', content: prompt },
+        { role: 'user', content: 'Start the conversation with a greeting' }
+      ];
+      
+      const llmReply = await callLLM(messages);
+      console.log('Generated initial greeting:', llmReply);
+      
+      const xml = buildSayResponse(llmReply);
+      res.type('text/xml').send(xml);
+      return;
+    }
+
+    // Step 2: Handle voice input if available
     let callerTranscript = '';
-    if (req.body && req.body.RecordingUrl) {
-      // Fetch the recording from Twilio and convert to a buffer.  Twilio
-      // recordings are served as audio/wav by default.  Node-fetch isn't
-      // installed globally; you can use undici/fetch if needed.  This is a
-      // placeholder to show where transcription would occur.
+    if (req.body?.RecordingUrl) {
+      console.log('Processing recording from:', req.body.RecordingUrl);
       try {
         const audioRes = await fetch(req.body.RecordingUrl);
         const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
         callerTranscript = await transcribeAudio(audioBuffer);
+        console.log('Transcription result:', callerTranscript);
       } catch (err) {
-        console.warn('Failed to transcribe recording:', err.message);
+        console.error('Transcription error:', err);
+        throw new Error('Failed to process voice input');
       }
     }
 
-    // Step 3: Compose messages for the LLM.  The system prompt gives the
-    // assistant instructions; the user message contains the caller's speech.
-    const messages = [];
-    if (prompt) messages.push({ role: 'system', content: prompt });
-    if (callerTranscript) messages.push({ role: 'user', content: callerTranscript });
-    else messages.push({ role: 'user', content: 'Hello' });
+    // Step 3: Compose messages for the LLM
+    const messages = [
+      { role: 'system', content: prompt },
+      { role: 'user', content: callerTranscript || 'Hello' }
+    ];
+    
+    console.log('Sending messages to LLM:', messages);
 
     // Step 4: Get the LLM response
     const llmReply = await callLLM(messages);
+    console.log('Received LLM response:', llmReply);
 
-    // Step 5: Synthesise the response into audio via Deepgram
-    const audioBuffer = await synthesiseSpeech(llmReply);
+    // Build basic TwiML response
+    const twiml = new twilio.twiml.VoiceResponse();
+    
+    // Add say/record logic
+    twiml.say({ voice: 'alice', language: 'en-US' }, llmReply);
+    twiml.record({
+      action: req.path, // Same endpoint for next interaction
+      method: 'POST',
+      transcribe: false, // We'll use Deepgram instead
+      maxLength: 30
+    });
 
-    // Step 6: Serve the audio to Twilio.  Twilio can play back audio from a
-    // URL via <Play>.  Here you would need to store audioBuffer in a
-    // temporary file or object storage and return its URL in TwiML.  For
-    // simplicity, this POC just speaks the text using TwiML's <Say>.
-    const xml = buildSayResponse(llmReply);
+    const xml = twiml.toString();
+    console.log('Generated TwiML:', xml);
     res.type('text/xml').send(xml);
   } catch (err) {
-    console.error('Voice handler error:', err);
-    const xml = buildSayResponse('Sorry, something went wrong.');
+    console.error('Voice handler error:', {
+      error: err.message,
+      stack: err.stack,
+      callSid: req.body?.CallSid
+    });
+    
+    const twiml = new twilio.twiml.VoiceResponse();
+    twiml.say(
+      { voice: 'alice', language: 'en-US' },
+      'I apologize, but I encountered a technical issue. Please try your request again.'
+    );
+    const xml = twiml.toString();
     res.type('text/xml').send(xml);
   }
 }
