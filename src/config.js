@@ -16,9 +16,9 @@ const config = {
     apiKey: process.env.DEEPGRAM_API_KEY
   },
   llm: {
-    provider: process.env.LLM_PROVIDER || 'google',
+    provider: process.env.LLM_PROVIDER || 'openrouter',
     apiKey: process.env.LLM_API_KEY,
-    model: process.env.LLM_MODEL || 'gemini-2.0-pro'
+    model: process.env.LLM_MODEL || 'openai/gpt-4o'
   },
   app: {
     baseUrl: process.env.APP_BASE_URL || 'http://localhost:3000'
