@@ -90,12 +90,36 @@ router.post('/call', async (req, res) => {
   if (!to) {
     return res.status(400).json({ error: 'Missing required field: to' });
   }
+  
+  console.log('Received outbound call request:', { to });
+  console.log('Using webhook URL:', `${config.app.baseUrl}/voice/outbound`);
+  console.log('Using Twilio config:', {
+    accountSid: config.twilio.accountSid,
+    phoneNumber: config.twilio.phoneNumber,
+    // Don't log the auth token for security
+  });
+
   try {
     const call = await placeCall(to, `${config.app.baseUrl}/voice/outbound`);
-    res.json({ callSid: call.sid });
+    console.log('Call placed successfully:', { callSid: call.sid, to });
+    res.json({ 
+      callSid: call.sid,
+      status: 'initiated',
+      to,
+      from: config.twilio.phoneNumber
+    });
   } catch (err) {
-    console.error('Failed to place call:', err);
-    res.status(500).json({ error: 'Failed to place call' });
+    console.error('Failed to place call:', {
+      error: err.message,
+      code: err.code,
+      to,
+      webhookUrl: `${config.app.baseUrl}/voice/outbound`
+    });
+    res.status(500).json({ 
+      error: 'Failed to place call',
+      details: err.message,
+      code: err.code
+    });
   }
 });
 

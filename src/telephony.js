@@ -17,12 +17,20 @@ const client = twilio(config.twilio.accountSid, config.twilio.authToken);
  * @param {string} url URL of your webhook that returns TwiML.
  * @returns {Promise<object>} The Twilio call resource.
  */
-export function placeCall(to, url) {
-  return client.calls.create({
-    to,
-    from: config.twilio.phoneNumber,
-    url
-  });
+export async function placeCall(to, url) {
+  console.log('Attempting to place call:', { to, from: config.twilio.phoneNumber, url });
+  try {
+    const call = await client.calls.create({
+      to,
+      from: config.twilio.phoneNumber,
+      url
+    });
+    console.log('Call placed successfully:', call.sid);
+    return call;
+  } catch (error) {
+    console.error('Failed to place call:', error.message);
+    throw error;
+  }
 }
 
 /**
