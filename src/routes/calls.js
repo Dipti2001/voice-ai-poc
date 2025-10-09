@@ -1,9 +1,13 @@
 import { Router } from 'express';
+import twilio from 'twilio';
 import { readPrompt } from '../prompt.js';
 import { callLLM } from '../llm.js';
 import { transcribeAudio, synthesiseSpeech } from '../speech.js';
 import { buildSayResponse, placeCall } from '../telephony.js';
 import config from '../config.js';
+
+// Initialize Twilio client for response building
+const client = twilio(config.twilio.accountSid, config.twilio.authToken);
 
 /**
  * Router for call-related endpoints.  Defines two main routes:
@@ -79,21 +83,10 @@ async function handleVoiceRequest(req, res) {
     const llmReply = await callLLM(messages);
     console.log('Received LLM response:', llmReply);
 
-    // Build basic TwiML response
-    const twiml = new twilio.twiml.VoiceResponse();
-    
-    // Add say/record logic
-    twiml.say({ voice: 'alice', language: 'en-US' }, llmReply);
-    twiml.record({
-      action: req.path, // Same endpoint for next interaction
-      method: 'POST',
-      transcribe: false, // We'll use Deepgram instead
-      maxLength: 30
-    });
-
-    const xml = twiml.toString();
-    console.log('Generated TwiML:', xml);
-    res.type('text/xml').send(xml);
+    // Build TwiML response using the helper
+    const twimlResponse = buildSayResponse(llmReply);
+    console.log('Generated TwiML response:', twimlResponse);
+    res.type('text/xml').send(twimlResponse);
   } catch (err) {
     console.error('Voice handler error:', {
       error: err.message,

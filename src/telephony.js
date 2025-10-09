@@ -43,8 +43,52 @@ export async function placeCall(to, url) {
  * @returns {string} The XML string Twilio will execute.
  */
 export function buildSayResponse(message) {
-  const twiml = new twilio.twiml.VoiceResponse();
-  twiml.say({ voice: 'alice', language: 'en-US' }, message);
-  twiml.hangup();
-  return twiml.toString();
+  try {
+    const twiml = new twilio.twiml.VoiceResponse();
+    
+    // Add pause at the start for better timing
+    twiml.pause({ length: 1 });
+    
+    // Split long messages into smaller chunks with pauses
+    const chunks = message.match(/.{1,250}(?:\s|$)/g) || [message];
+    chunks.forEach((chunk, index) => {
+      if (index > 0) twiml.pause({ length: 0.5 });
+      twiml.say({ 
+        voice: 'alice', 
+        language: 'en-US',
+        rate: '0.9' // Slightly slower for better clarity
+      }, chunk.trim());
+    });
+    
+    // Add a pause before gathering user input
+    twiml.pause({ length: 1 });
+    
+    // Add gather for user input
+    const gather = twiml.gather({
+      input: 'speech',
+      action: '/voice/inbound',
+      method: 'POST',
+      speechTimeout: 'auto',
+      language: 'en-US'
+    });
+    
+    // Fallback if no input received
+    twiml.say({ 
+      voice: 'alice', 
+      language: 'en-US' 
+    }, 'I didn\'t hear anything. Please call back if you\'d like to continue the conversation.');
+    
+    twiml.hangup();
+    
+    const response = twiml.toString();
+    console.log('Generated TwiML:', response);
+    return response;
+  } catch (err) {
+    console.error('Error building TwiML:', err);
+    // Return a simple error response if TwiML generation fails
+    const fallback = new twilio.twiml.VoiceResponse();
+    fallback.say('I apologize, but I encountered a technical issue. Please try again in a moment.');
+    fallback.hangup();
+    return fallback.toString();
+  }
 }
