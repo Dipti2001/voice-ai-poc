@@ -80,8 +80,12 @@ class AIService {
         }
       );
 
-      const audioBuffer = await response.getStream();
-      const audioData = await this.streamToBuffer(audioBuffer);
+      const audioStream = await response.getStream();
+      if (!audioStream) {
+        throw new Error('No audio stream received from Deepgram');
+      }
+
+      const audioData = await this.streamToBuffer(audioStream);
 
       const filename = `${uuidv4()}.wav`;
       const filepath = path.join(config.audio.storagePath, filename);
@@ -141,11 +145,22 @@ class AIService {
   }
 
   streamToBuffer(stream) {
-    return new Promise((resolve, reject) => {
-      const chunks = [];
-      stream.on('data', chunk => chunks.push(chunk));
-      stream.on('end', () => resolve(Buffer.concat(chunks)));
-      stream.on('error', reject);
+    return new Promise(async (resolve, reject) => {
+      try {
+        const chunks = [];
+        const reader = stream.getReader();
+
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          if (value) chunks.push(value);
+        }
+
+        reader.releaseLock();
+        resolve(Buffer.concat(chunks));
+      } catch (error) {
+        reject(error);
+      }
     });
   }
 
