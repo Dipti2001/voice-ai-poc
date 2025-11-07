@@ -185,6 +185,7 @@ router.post('/twiml/:agentId', async (req, res) => {
     const agentId = req.params.agentId;
     const agent = await Agent.findById(agentId);
     const isTransfer = req.query.transfer === 'true';
+    const isConsentResponse = req.query.consent === 'true';
 
     if (!agent) {
       console.error(`Agent not found: ${agentId}`);
@@ -240,18 +241,61 @@ router.post('/twiml/:agentId', async (req, res) => {
 async function handleAgentCall(req, res, agent) {
   try {
     const twilioData = twilioService.parseTwilioRequest(req.body);
-    console.log(`Call handling - Agent: ${agent.name}, From: ${twilioData.from}, CallSid: ${twilioData.callSid}`);
+    const isConsentResponse = req.query.consent === 'true';
+    console.log(`Call handling - Agent: ${agent.name}, From: ${twilioData.from}, CallSid: ${twilioData.callSid}, Consent: ${isConsentResponse}`);
 
     let conversation = await Conversation.findByCallSid(twilioData.callSid);
 
+    // Handle consent response first
+    if (isConsentResponse) {
+      if (!conversation) {
+        conversation = await Conversation.create({
+          agent_id: agent.id,
+          call_sid: twilioData.callSid,
+          direction: twilioData.direction || 'inbound',
+          customer_number: twilioData.from
+        });
+        console.log(`Created new conversation: ${conversation.id}`);
+      }
+
+      // Check if user agreed to proceed
+      const consentResponse = twilioData.speechResult?.toLowerCase() || '';
+      const agreed = consentResponse.includes('yes') || consentResponse.includes('agree') ||
+                     consentResponse.includes('okay') || consentResponse.includes('sure');
+
+      if (agreed) {
+        console.log('User consented, proceeding with conversation');
+        // User agreed, start the actual conversation
+        const greeting = `Thank you for your consent. ${agent.name} here. How can I help you today?`;
+        console.log(`Sending greeting: ${greeting}`);
+
+        const ttsResult = await aiService.generateTTS(greeting, agent.voice);
+
+        await Conversation.addMessage(conversation.id, 'assistant', greeting);
+        await Conversation.update(conversation.id, { audio_url: ttsResult.url });
+
+        const twiml = twilioService.generateTwiml(ttsResult.url, `${config.app.baseUrl}/api/calls/twiml/${agent.id}`);
+        return res.type('text/xml').send(twiml);
+      } else {
+        console.log('User did not consent, ending call');
+        // User did not agree, end the call
+        const goodbyeMessage = "I understand. Thank you for your time. Goodbye.";
+        const goodbyeTts = await aiService.generateTTS(goodbyeMessage, agent.voice);
+
+        const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response>
+          <Play>${config.app.baseUrl}${goodbyeTts.url}</Play>
+          <Hangup/>
+        </Response>`;
+        return res.type('text/xml').send(twiml);
+      }
+    }
+
+    // Check if this is the first interaction (no conversation exists yet)
     if (!conversation) {
-      conversation = await Conversation.create({
-        agent_id: agent.id,
-        call_sid: twilioData.callSid,
-        direction: twilioData.direction || 'inbound',
-        customer_number: twilioData.from
-      });
-      console.log(`Created new conversation: ${conversation.id}`);
+      console.log('First interaction, playing consent message');
+      // First interaction - play consent message
+      const twiml = twilioService.generateConsentTwiml(`${config.app.baseUrl}/api/calls/twiml/${agent.id}`);
+      return res.type('text/xml').send(twiml);
     }
 
     let twiml;
@@ -298,8 +342,9 @@ async function handleAgentCall(req, res, agent) {
         twiml = twilioService.generateTwiml(ttsResult.url, `${config.app.baseUrl}/api/calls/twiml/${agent.id}`);
       }
     } else {
+      // This shouldn't happen in normal flow since consent comes first
       const greeting = `Hello! This is ${agent.name}. How can I help you today?`;
-      console.log(`Sending greeting: ${greeting}`);
+      console.log(`Sending fallback greeting: ${greeting}`);
 
       const ttsResult = await aiService.generateTTS(greeting, agent.voice);
 

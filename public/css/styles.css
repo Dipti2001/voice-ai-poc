@@ -286,6 +286,26 @@ textarea {
     font-size: 0.9em;
 }
 
+.conversation-info {
+    background: #f8f9fa;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+}
+
+.recording-section {
+    background: #fff3cd;
+    padding: 15px;
+    border-radius: 5px;
+    margin-bottom: 20px;
+    border-left: 4px solid #ffc107;
+}
+
+.recording-section h4 {
+    color: #856404;
+    margin-bottom: 10px;
+}
+
 .conversation-messages {
     max-height: 400px;
     overflow-y: auto;
@@ -293,6 +313,13 @@ textarea {
     border-radius: 5px;
     padding: 15px;
     margin-top: 20px;
+}
+
+.conversation-messages h4 {
+    color: #2c3e50;
+    margin-bottom: 15px;
+    padding-bottom: 10px;
+    border-bottom: 1px solid #ecf0f1;
 }
 
 .message {
@@ -320,6 +347,13 @@ textarea {
 
 .message-content {
     line-height: 1.4;
+}
+
+.message-time {
+    font-size: 0.7em;
+    color: #999;
+    margin-top: 5px;
+    text-align: right;
 }
 
 @media (max-width: 768px) {

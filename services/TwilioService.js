@@ -61,6 +61,24 @@ class TwilioService {
     return twiml;
   }
 
+  generateConsentTwiml(actionUrl) {
+    const consentMessage = "Hello, this is an AI-powered call. Our conversation will be recorded for quality and training purposes. If you agree to proceed, please say 'yes' or 'I agree'. If you do not wish to continue, you may hang up or say 'no'.";
+
+    let twiml = '<?xml version="1.0" encoding="UTF-8"?><Response>';
+
+    // Play consent message and gather response
+    twiml += `<Gather input="speech" action="${actionUrl}?consent=true" method="POST" timeout="10" speechTimeout="auto" language="en-US" actionOnEmptyResult="false" bargeIn="true">`;
+    twiml += `<Say voice="alice">${consentMessage}</Say>`;
+    twiml += '</Gather>';
+
+    // If no response or rejection, hang up
+    twiml += '<Say voice="alice">Thank you for your time. Goodbye.</Say>';
+    twiml += '<Hangup/>';
+
+    twiml += '</Response>';
+    return twiml;
+  }
+
   generateStreamingTwiml(streamUrl) {
     const twiml = `<?xml version="1.0" encoding="UTF-8"?>
       <Response>

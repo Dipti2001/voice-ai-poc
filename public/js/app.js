@@ -570,6 +570,19 @@ class VoiceAIAgentSystem {
             const modal = document.getElementById('conversation-modal');
             const content = document.getElementById('conversation-content');
 
+            let recordingHtml = '';
+            if (conversation.recording_url) {
+                recordingHtml = `
+                    <div class="recording-section">
+                        <h4>Call Recording</h4>
+                        <audio controls style="width: 100%; margin: 10px 0;">
+                            <source src="${conversation.recording_url}" type="audio/wav">
+                            Your browser does not support the audio element.
+                        </audio>
+                    </div>
+                `;
+            }
+
             content.innerHTML = `
                 <div class="conversation-info">
                     <p><strong>Agent:</strong> ${conversation.agent_name}</p>
@@ -577,12 +590,17 @@ class VoiceAIAgentSystem {
                     <p><strong>Direction:</strong> ${conversation.direction}</p>
                     <p><strong>Rating:</strong> ${conversation.rating || 'Not rated'}/10</p>
                     <p><strong>Success:</strong> ${conversation.success ? 'Yes' : 'No'}</p>
+                    <p><strong>Date:</strong> ${new Date(conversation.created_at).toLocaleString()}</p>
+                    ${conversation.duration ? `<p><strong>Duration:</strong> ${Math.round(conversation.duration)}s</p>` : ''}
                 </div>
+                ${recordingHtml}
                 <div class="conversation-messages">
+                    <h4>Conversation Transcript</h4>
                     ${conversation.messages.map(msg => `
                         <div class="message ${msg.role}">
                             <div class="message-role">${msg.role === 'user' ? 'Customer' : 'Agent'}</div>
                             <div class="message-content">${msg.content}</div>
+                            <div class="message-time">${new Date(msg.timestamp).toLocaleTimeString()}</div>
                         </div>
                     `).join('')}
                 </div>
