@@ -21,6 +21,33 @@ router.get('/', async (req, res) => {
   }
 });
 
+// Callback requests management
+router.get('/callbacks', async (req, res) => {
+  try {
+    const { default: CallbackRequest } = await import('../../models/CallbackRequest.js');
+    const callbacks = await CallbackRequest.findAll();
+    res.json(callbacks);
+  } catch (error) {
+    console.error('Error fetching callback requests:', error);
+    res.status(500).json({ error: 'Failed to fetch callback requests' });
+  }
+});
+
+router.put('/callbacks/:id', async (req, res) => {
+  try {
+    const { default: CallbackRequest } = await import('../../models/CallbackRequest.js');
+    const { status, notes } = req.body;
+    const updated = await CallbackRequest.updateStatus(req.params.id, status, notes);
+    if (!updated) {
+      return res.status(404).json({ error: 'Callback request not found' });
+    }
+    res.json(updated);
+  } catch (error) {
+    console.error('Error updating callback request:', error);
+    res.status(500).json({ error: 'Failed to update callback request' });
+  }
+});
+
 router.get('/:id', async (req, res) => {
   try {
     const conversation = await Conversation.findById(req.params.id);
@@ -157,10 +184,48 @@ router.post('/twiml/:agentId', async (req, res) => {
   try {
     const agentId = req.params.agentId;
     const agent = await Agent.findById(agentId);
+    const isTransfer = req.query.transfer === 'true';
 
     if (!agent) {
       console.error(`Agent not found: ${agentId}`);
       return res.status(404).send('Agent not found');
+    }
+
+    // Handle transfer callback time collection
+    if (isTransfer) {
+      const twilioData = twilioService.parseTwilioRequest(req.body);
+      console.log(`Transfer time response: ${twilioData.speechResult}`);
+
+      const conversation = await Conversation.findByCallSid(twilioData.callSid);
+      if (conversation) {
+        // Import CallbackRequest here to avoid circular dependencies
+        const { default: CallbackRequest } = await import('../../models/CallbackRequest.js');
+
+        // Update callback request with preferred time
+        const callbackRequests = await CallbackRequest.findByAgentId(agent.id);
+        const latestRequest = callbackRequests.find(req =>
+          req.conversation_id === conversation.id && req.status === 'pending'
+        );
+
+        if (latestRequest && twilioData.speechResult) {
+          await CallbackRequest.updateStatus(
+            latestRequest.id,
+            'pending',
+            `Preferred time: ${twilioData.speechResult}`
+          );
+        }
+      }
+
+      // Send goodbye message and hang up
+      const goodbyeMessage = "Thank you for providing your preferred time. We'll call you back soon. Goodbye.";
+      const goodbyeTts = await aiService.generateTTS(goodbyeMessage, agent.voice);
+
+      const twiml = `<?xml version="1.0" encoding="UTF-8"?><Response>
+        <Play>${config.app.baseUrl}${goodbyeTts.url}</Play>
+        <Hangup/>
+      </Response>`;
+
+      return res.type('text/xml').send(twiml);
     }
 
     return handleAgentCall(req, res, agent);
@@ -176,7 +241,7 @@ async function handleAgentCall(req, res, agent) {
   try {
     const twilioData = twilioService.parseTwilioRequest(req.body);
     console.log(`Call handling - Agent: ${agent.name}, From: ${twilioData.from}, CallSid: ${twilioData.callSid}`);
-    
+
     let conversation = await Conversation.findByCallSid(twilioData.callSid);
 
     if (!conversation) {
@@ -195,22 +260,47 @@ async function handleAgentCall(req, res, agent) {
       await Conversation.addMessage(conversation.id, 'user', twilioData.speechResult);
 
       const messages = await Conversation.getMessages(conversation.id);
-      const aiResponse = await aiService.generateResponse(
+      const aiResult = await aiService.generateResponse(
         messages.map(m => ({ role: m.role, content: m.content })),
-        agent.prompt
+        agent.prompt,
+        conversation.id
       );
 
-      console.log(`AI Response: ${aiResponse}`);
-      await Conversation.addMessage(conversation.id, 'assistant', aiResponse);
+      console.log(`AI Response: ${aiResult.response}`);
+      await Conversation.addMessage(conversation.id, 'assistant', aiResult.response);
 
-      const ttsResult = await aiService.generateTTS(aiResponse, agent.voice);
-      await Conversation.update(conversation.id, { audio_url: ttsResult.url });
+      // Handle human transfer request
+      if (aiResult.transferRequested) {
+        console.log('Human transfer requested, creating callback request');
 
-      twiml = twilioService.generateTwiml(ttsResult.url, `${config.app.baseUrl}/api/calls/twiml/${agent.id}`);
+        // Import CallbackRequest here to avoid circular dependencies
+        const { default: CallbackRequest } = await import('../../models/CallbackRequest.js');
+
+        await CallbackRequest.create({
+          conversation_id: conversation.id,
+          customer_number: twilioData.from,
+          agent_id: agent.id,
+          reason: aiResult.transferReason,
+          status: 'pending'
+        });
+
+        // Generate transfer response
+        const transferTts = await aiService.generateTTS(aiResult.response, agent.voice);
+        await Conversation.update(conversation.id, { audio_url: transferTts.url });
+
+        // Use different TwiML for transfer - gather preferred time
+        twiml = twilioService.generateTransferTwiml(transferTts.url, `${config.app.baseUrl}/api/calls/twiml/${agent.id}`);
+      } else {
+        // Normal response
+        const ttsResult = await aiService.generateTTS(aiResult.response, agent.voice);
+        await Conversation.update(conversation.id, { audio_url: ttsResult.url });
+
+        twiml = twilioService.generateTwiml(ttsResult.url, `${config.app.baseUrl}/api/calls/twiml/${agent.id}`);
+      }
     } else {
       const greeting = `Hello! This is ${agent.name}. How can I help you today?`;
       console.log(`Sending greeting: ${greeting}`);
-      
+
       const ttsResult = await aiService.generateTTS(greeting, agent.voice);
 
       await Conversation.addMessage(conversation.id, 'assistant', greeting);

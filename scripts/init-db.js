@@ -73,9 +73,26 @@ async function initializeDatabase() {
         );
       `);
 
+      db.run(`
+        CREATE TABLE IF NOT EXISTS callback_requests (
+          id TEXT PRIMARY KEY,
+          conversation_id TEXT NOT NULL,
+          customer_number TEXT NOT NULL,
+          agent_id TEXT,
+          reason TEXT DEFAULT 'Human transfer requested',
+          preferred_time DATETIME,
+          status TEXT CHECK(status IN ('pending', 'scheduled', 'completed', 'cancelled')) DEFAULT 'pending',
+          notes TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (conversation_id) REFERENCES conversations (id),
+          FOREIGN KEY (agent_id) REFERENCES agents (id)
+        );
+      `);
+
       db.run(`CREATE INDEX IF NOT EXISTS idx_conversations_agent_id ON conversations(agent_id);`);
       db.run(`CREATE INDEX IF NOT EXISTS idx_conversations_created_at ON conversations(created_at);`);
       db.run(`CREATE INDEX IF NOT EXISTS idx_messages_conversation_id ON conversation_messages(conversation_id);`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_callback_requests_status ON callback_requests(status);`);
 
       db.close((err) => {
         if (err) {

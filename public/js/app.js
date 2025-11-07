@@ -12,6 +12,7 @@ class VoiceAIAgentSystem {
         this.loadAgents();
         this.loadContacts();
         this.loadCalls();
+        this.loadCallbacks();
         this.loadAnalytics();
     }
 
@@ -20,6 +21,7 @@ class VoiceAIAgentSystem {
         document.getElementById('agents-tab').addEventListener('click', () => this.switchTab('agents'));
         document.getElementById('contacts-tab').addEventListener('click', () => this.switchTab('contacts'));
         document.getElementById('calls-tab').addEventListener('click', () => this.switchTab('calls'));
+        document.getElementById('callbacks-tab').addEventListener('click', () => this.switchTab('callbacks'));
         document.getElementById('analytics-tab').addEventListener('click', () => this.switchTab('analytics'));
 
         // Agent modal
@@ -110,6 +112,17 @@ class VoiceAIAgentSystem {
         }
     }
 
+    async loadCallbacks() {
+        try {
+            const response = await fetch('/api/calls/callbacks');
+            const callbacks = await response.json();
+            this.renderCallbacks(callbacks);
+        } catch (error) {
+            console.error('Error loading callbacks:', error);
+            this.showError('Failed to load callback requests');
+        }
+    }
+
     renderCalls(calls) {
         const container = document.getElementById('calls-list');
         container.innerHTML = '';
@@ -122,16 +135,65 @@ class VoiceAIAgentSystem {
         calls.forEach(call => {
             const card = document.createElement('div');
             card.className = 'card';
-            const statusClass = call.success ? 'success' : call.rating < 5 ? 'error' : 'warning';
+            let statusText, statusClass;
+
+            if (call.rating >= 8) {
+                statusText = 'Excellent';
+                statusClass = 'success';
+            } else if (call.rating >= 6) {
+                statusText = 'Good';
+                statusClass = 'success';
+            } else if (call.rating >= 4) {
+                statusText = 'Average';
+                statusClass = 'warning';
+            } else {
+                statusText = 'Needs Improvement';
+                statusClass = 'error';
+            }
+
             card.innerHTML = `
                 <h3>${call.customer_number}</h3>
                 <p><strong>Agent:</strong> ${call.agent_name}</p>
                 <p><strong>Direction:</strong> ${call.direction}</p>
-                <p><strong>Status:</strong> <span class="status ${statusClass}">${call.success ? 'Successful' : 'Needs Improvement'}</span></p>
+                <p><strong>Status:</strong> <span class="status ${statusClass}">${statusText}</span></p>
                 ${call.rating ? `<p><strong>Rating:</strong> ${call.rating}/10</p>` : ''}
                 <p><strong>Date:</strong> ${new Date(call.created_at).toLocaleDateString()}</p>
                 <div class="card-actions">
                     <button class="btn primary" onclick="app.viewConversation('${call.id}')">View Details</button>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    renderCallbacks(callbacks) {
+        const container = document.getElementById('callbacks-list');
+        container.innerHTML = '';
+
+        if (callbacks.length === 0) {
+            container.innerHTML = '<p class="empty-state">No callback requests at this time.</p>';
+            return;
+        }
+
+        callbacks.forEach(callback => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            const statusClass = callback.status === 'completed' ? 'success' :
+                               callback.status === 'scheduled' ? 'warning' : 'error';
+
+            card.innerHTML = `
+                <h3>${callback.customer_number}</h3>
+                <p><strong>Agent:</strong> ${callback.agent_name || 'Unassigned'}</p>
+                <p><strong>Reason:</strong> ${callback.reason}</p>
+                <p><strong>Status:</strong> <span class="status ${statusClass}">${callback.status}</span></p>
+                ${callback.notes ? `<p><strong>Notes:</strong> ${callback.notes}</p>` : ''}
+                <p><strong>Requested:</strong> ${new Date(callback.created_at).toLocaleDateString()}</p>
+                <div class="card-actions">
+                    ${callback.status === 'pending' ?
+                        `<button class="btn primary" onclick="app.updateCallbackStatus('${callback.id}', 'scheduled')">Schedule</button>
+                         <button class="btn danger" onclick="app.updateCallbackStatus('${callback.id}', 'completed')">Complete</button>` :
+                        `<button class="btn secondary" onclick="app.updateCallbackStatus('${callback.id}', 'pending')">Reopen</button>`
+                    }
                 </div>
             `;
             container.appendChild(card);
@@ -530,6 +592,27 @@ class VoiceAIAgentSystem {
         } catch (error) {
             console.error('Error loading conversation:', error);
             this.showError('Failed to load conversation');
+        }
+    }
+
+    async updateCallbackStatus(callbackId, status) {
+        try {
+            const notes = status === 'scheduled' ? prompt('Enter scheduling notes:') : '';
+            const response = await fetch(`/api/calls/callbacks/${callbackId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ status, notes })
+            });
+
+            if (response.ok) {
+                this.loadCallbacks();
+                this.showSuccess(`Callback ${status} successfully`);
+            } else {
+                throw new Error('Failed to update callback status');
+            }
+        } catch (error) {
+            console.error('Error updating callback status:', error);
+            this.showError('Failed to update callback status');
         }
     }
 

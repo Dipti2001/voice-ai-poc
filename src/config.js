@@ -34,10 +34,10 @@ const config = {
   llm: {
     provider: process.env.LLM_PROVIDER || 'openrouter',
     apiKey: process.env.LLM_API_KEY,
-    model: process.env.LLM_MODEL || 'openai/gpt-4o',
-    maxTokens: parseInt(process.env.LLM_MAX_TOKENS) || 150,
-    temperature: parseFloat(process.env.LLM_TEMPERATURE) || 0.7,
-    timeout: parseInt(process.env.LLM_TIMEOUT) || 10000
+    model: process.env.LLM_MODEL || 'openai/gpt-4o-mini', // Faster model
+    maxTokens: parseInt(process.env.LLM_MAX_TOKENS) || 75, // Even more concise
+    temperature: parseFloat(process.env.LLM_TEMPERATURE) || 0.6, // Slightly lower for consistency
+    timeout: parseInt(process.env.LLM_TIMEOUT) || 2500 // 2.5 seconds for faster responses
   },
   app: {
     port: parseInt(process.env.PORT) || 3000,

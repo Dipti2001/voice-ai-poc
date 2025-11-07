@@ -11,20 +11,48 @@ class AIService {
     this.llmProvider = config.llm.provider;
     this.llmApiKey = config.llm.apiKey;
     this.llmModel = config.llm.model;
+    this.llmMaxTokens = config.llm.maxTokens;
+    this.llmTemperature = config.llm.temperature;
   }
 
-  async generateResponse(messages, agentPrompt) {
+  async generateResponse(messages, agentPrompt, conversationId = null) {
     try {
+      const lastMessage = messages[messages.length - 1];
+      const userInput = lastMessage?.content?.toLowerCase() || '';
+
+      // Check for human transfer requests
+      const transferKeywords = [
+        'speak to a human', 'talk to a human', 'transfer to human',
+        'speak to a person', 'talk to a person', 'transfer to person',
+        'human representative', 'live person', 'real person',
+        'customer service', 'speak to manager', 'talk to manager'
+      ];
+
+      const wantsTransfer = transferKeywords.some(keyword => userInput.includes(keyword));
+
+      if (wantsTransfer) {
+        return {
+          response: "I understand you'd like to speak with a human representative. I'll arrange for a callback from our team. When would be a good time for us to reach you?",
+          transferRequested: true,
+          transferReason: 'Customer requested human assistance'
+        };
+      }
+
+      // Add voice conversation instructions for concise responses
+      const voiceInstructions = `You are a voice assistant. Keep your responses CONCISE and CONVERSATIONAL - aim for 1-2 sentences maximum. Avoid long explanations. Be natural and friendly, like you're talking to someone on the phone. Respond quickly and to the point.
+
+${agentPrompt}`;
+
       const systemMessage = {
         role: 'system',
-        content: agentPrompt
+        content: voiceInstructions
       };
 
       const payload = {
         model: this.llmModel,
         messages: [systemMessage, ...messages],
-        max_tokens: config.llm.maxTokens,
-        temperature: config.llm.temperature
+        max_tokens: Math.min(this.llmMaxTokens, 75), // Cap at 75 tokens for voice responses
+        temperature: this.llmTemperature
       };
 
       const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -44,10 +72,16 @@ class AIService {
       }
 
       const data = await response.json();
-      return data.choices[0].message.content;
+      return {
+        response: data.choices[0].message.content,
+        transferRequested: false
+      };
     } catch (error) {
       console.error('Error generating LLM response:', error);
-      return 'I apologize, but I\'m having trouble responding right now. Please try again.';
+      return {
+        response: 'I apologize, but I\'m having trouble responding right now. Please try again.',
+        transferRequested: false
+      };
     }
   }
 
@@ -118,13 +152,19 @@ class AIService {
         Response format: JSON with keys: rating, success_factors, improvements, topics
       `;
 
-      const response = await this.generateResponse(
+      // Use a separate method for analysis that doesn't have voice constraints
+      const response = await this.generateAnalysisResponse(
         [{ role: 'user', content: analysisPrompt }],
         'You are a conversation analyst. Always respond with valid JSON.'
       );
 
       try {
-        return JSON.parse(response);
+        const result = JSON.parse(response);
+        // Ensure rating is a valid number
+        if (typeof result.rating !== 'number' || result.rating < 1 || result.rating > 10) {
+          result.rating = 5;
+        }
+        return result;
       } catch {
         return {
           rating: 5,
@@ -141,6 +181,44 @@ class AIService {
         improvements: ['Analysis failed'],
         topics: ['Unknown']
       };
+    }
+  }
+
+  async generateAnalysisResponse(messages, systemPrompt) {
+    try {
+      const systemMessage = {
+        role: 'system',
+        content: systemPrompt
+      };
+
+      const payload = {
+        model: this.llmModel,
+        messages: [systemMessage, ...messages],
+        max_tokens: 200, // More tokens for analysis
+        temperature: 0.3 // Lower temperature for consistent analysis
+      };
+
+      const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.llmApiKey}`,
+          'Content-Type': 'application/json',
+          'HTTP-Referer': config.app.baseUrl,
+          'X-Title': 'Voice AI Agent System'
+        },
+        body: JSON.stringify(payload),
+        signal: AbortSignal.timeout(5000) // 5 seconds for analysis
+      });
+
+      if (!response.ok) {
+        throw new Error(`LLM API error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      return data.choices[0].message.content;
+    } catch (error) {
+      console.error('Error generating analysis response:', error);
+      throw error;
     }
   }
 
