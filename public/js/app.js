@@ -597,8 +597,17 @@ class VoiceAIAgentSystem {
             const response = await fetch(`/api/calls/${conversationId}`);
             const conversation = await response.json();
 
+            console.log('Conversation data:', conversation);
+            console.log('Number of messages:', conversation.messages ? conversation.messages.length : 0);
+
             const modal = document.getElementById('conversation-modal');
             const content = document.getElementById('conversation-content');
+
+            // Make the modal larger for conversations
+            modal.querySelector('.modal-content').classList.add('large');
+
+            // Make the modal larger for conversations
+            modal.querySelector('.modal-content').classList.add('large');
 
             let recordingHtml = '';
             if (conversation.recording_url) {
@@ -606,7 +615,7 @@ class VoiceAIAgentSystem {
                     <div class="recording-section">
                         <h4>Call Recording</h4>
                         <audio controls style="width: 100%; margin: 10px 0;">
-                            <source src="${conversation.recording_url}" type="audio/wav">
+                            <source src="/api/calls/recording/${conversation.id}" type="audio/wav">
                             Your browser does not support the audio element.
                         </audio>
                     </div>
@@ -626,7 +635,9 @@ class VoiceAIAgentSystem {
                 ${recordingHtml}
                 <div class="conversation-messages">
                     <h4>Conversation Transcript</h4>
-                    ${conversation.messages.map(msg => `
+                    ${conversation.messages
+                        .sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp))
+                        .map(msg => `
                         <div class="message ${msg.role}">
                             <div class="message-role">${msg.role === 'user' ? 'Customer' : 'Agent'}</div>
                             <div class="message-content">${msg.content}</div>

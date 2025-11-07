@@ -290,17 +290,13 @@ async function handleAgentCall(req, res, agent) {
       }
     }
 
-    // For outbound calls, skip consent and go directly to conversation
-    if (conversation && (conversation.direction === 'outbound' || twilioData.direction === 'outbound')) {
-      console.log('Outbound call detected, skipping consent');
-    } else {
-      // Check if this is the first interaction for inbound calls (no conversation exists yet)
-      if (!conversation) {
-        console.log('First inbound interaction, playing consent message');
-        // First interaction - play consent message
-        const twiml = twilioService.generateConsentTwiml(`${config.app.baseUrl}/api/calls/twiml/${agent.id}`);
-        return res.type('text/xml').send(twiml);
-      }
+    // Check if this is the first interaction (no messages in conversation yet)
+    const messages = conversation ? await Conversation.getMessages(conversation.id) : [];
+    if (!conversation || messages.length === 0) {
+      console.log('First interaction, playing consent message');
+      // First interaction - play consent message for both inbound and outbound calls
+      const twiml = twilioService.generateConsentTwiml(`${config.app.baseUrl}/api/calls/twiml/${agent.id}`);
+      return res.type('text/xml').send(twiml);
     }
 
     let twiml;
@@ -423,13 +419,27 @@ router.post('/voicemail', async (req, res) => {
   }
 });
 
-router.get('/analytics/:agentId?', async (req, res) => {
+router.get('/recording/:conversationId', async (req, res) => {
   try {
-    const analytics = await Conversation.getAnalytics(req.params.agentId);
-    res.json(analytics);
+    const conversation = await Conversation.findById(req.params.conversationId);
+    if (!conversation || !conversation.recording_url) {
+      return res.status(404).json({ error: 'Recording not found' });
+    }
+
+    // Fetch the recording from Twilio and proxy it to the client
+    const response = await fetch(conversation.recording_url);
+    if (!response.ok) {
+      return res.status(404).json({ error: 'Failed to fetch recording' });
+    }
+
+    const contentType = response.headers.get('content-type') || 'audio/wav';
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+
+    response.body.pipe(res);
   } catch (error) {
-    console.error('Error fetching analytics:', error);
-    res.status(500).json({ error: 'Failed to fetch analytics' });
+    console.error('Error fetching recording:', error);
+    res.status(500).json({ error: 'Failed to fetch recording' });
   }
 });
 

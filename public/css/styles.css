@@ -307,7 +307,7 @@ textarea {
 }
 
 .conversation-messages {
-    max-height: 400px;
+    max-height: 60vh;
     overflow-y: auto;
     border: 1px solid #ecf0f1;
     border-radius: 5px;
