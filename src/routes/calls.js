@@ -1,138 +1,161 @@
-import { Router } from 'express';
-import { readPrompt } from '../prompt.js';
-import { callLLM } from '../llm.js';
-import { transcribeAudio, synthesiseSpeech } from '../speech.js';
-import { buildSayResponse, placeCall } from '../telephony.js';
+import express from 'express';
+import Conversation from '../../models/Conversation.js';
+import Agent from '../../models/Agent.js';
+import TwilioService from '../../services/TwilioService.js';
+import AIService from '../../services/AIService.js';
 import config from '../config.js';
 
-/**
- * Router for call-related endpoints.  Defines two main routes:
- *
- *   POST /voice/inbound  – Twilio webhook for inbound calls.  Reads the
- *                          incoming audio (if streaming enabled), sends it
- *                          through ASR and LLM, synthesises a response, and
- *                          returns TwiML to play the audio back.
- *
- *   POST /voice/outbound – Called by Twilio when you initiate an
- *                          outbound call via placeCall().  For this POC the
- *                          behaviour is the same as inbound.
- */
-const router = Router();
+const router = express.Router();
+const twilioService = new TwilioService();
+const aiService = new AIService();
 
-// Helper: handle an inbound or outbound voice request from Twilio
-async function handleVoiceRequest(req, res) {
+router.get('/', async (req, res) => {
   try {
-    // Step 1: Get the prompt and system instructions for the agent
-    const prompt = await readPrompt();
+    const limit = parseInt(req.query.limit) || 50;
+    const conversations = await Conversation.findAll(limit);
+    res.json(conversations);
+  } catch (error) {
+    console.error('Error fetching conversations:', error);
+    res.status(500).json({ error: 'Failed to fetch conversations' });
+  }
+});
 
-    // Step 2: Use Deepgram for real-time ASR
-    let callerTranscript = '';
-    if (req.body && req.body.SpeechResult) {
-      // Use the direct speech result if available
-      callerTranscript = req.body.SpeechResult;
-    } else if (req.body && req.body.MediaUrl) {
-      try {
-        const audioRes = await fetch(req.body.MediaUrl);
-        const audioBuffer = Buffer.from(await audioRes.arrayBuffer());
-        callerTranscript = await transcribeAudio(audioBuffer);
-      } catch (err) {
-        console.warn('Failed to transcribe audio:', err.message);
-      }
+router.get('/:id', async (req, res) => {
+  try {
+    const conversation = await Conversation.findById(req.params.id);
+    if (!conversation) {
+      return res.status(404).json({ error: 'Conversation not found' });
     }
 
-    // Step 3: Compose messages for the LLM.  The system prompt gives the
-    // assistant instructions; the user message contains the caller's speech.
-    const messages = [];
-    if (prompt) messages.push({ role: 'system', content: prompt });
-    if (callerTranscript) messages.push({ role: 'user', content: callerTranscript });
-    else messages.push({ role: 'user', content: 'Hello' });
-
-    // Step 4: Get the LLM response
-    const llmReply = await callLLM(messages);
-
-    // Step 5: Synthesise the response into audio via Deepgram
-    const audioBuffer = await synthesiseSpeech(llmReply);
-
-    // Step 6: Serve the audio to Twilio.  Twilio can play back audio from a
-    // URL via <Play>.  Here you would need to store audioBuffer in a
-    // temporary file or object storage and return its URL in TwiML.  For
-    // simplicity, this POC just speaks the text using TwiML's <Say>.
-    const xml = buildSayResponse(llmReply);
-    res.type('text/xml').send(xml);
-  } catch (err) {
-    console.error('Voice handler error:', err);
-    const xml = buildSayResponse('Sorry, something went wrong.');
-    res.type('text/xml').send(xml);
+    const messages = await Conversation.getMessages(req.params.id);
+    res.json({ ...conversation, messages });
+  } catch (error) {
+    console.error('Error fetching conversation:', error);
+    res.status(500).json({ error: 'Failed to fetch conversation' });
   }
-}
-
-// Twilio invokes this webhook on inbound calls
-router.post('/voice/inbound', (req, res) => {
-  handleVoiceRequest(req, res);
 });
 
-// Twilio invokes this webhook on outbound calls
-router.post('/voice/outbound', (req, res) => {
-  handleVoiceRequest(req, res);
-});
-
-// Expose a REST endpoint to trigger an outbound call from your application.
-// Example: POST /call { "to": "+15551234567" }
-router.post('/call', async (req, res) => {
-  const to = req.body?.to;
-  if (!to) {
-    return res.status(400).json({ error: 'Missing required field: to' });
-  }
+router.post('/outbound', async (req, res) => {
   try {
-    const call = await placeCall(to, `${config.app.baseUrl}/voice/outbound`);
-    res.json({ callSid: call.sid });
-  } catch (err) {
-    console.error('Failed to place call:', err);
-    res.status(500).json({ error: 'Failed to place call' });
-  }
-});
+    const { agent_id, to } = req.body;
 
-// Handle real-time audio streaming with Deepgram
-router.post('/voice/stream', async (req, res) => {
-  try {
-    // Create a Deepgram live transcription session
-    const deepgramLive = deepgram.transcription.live({
-      punctuate: true,
-      smart_format: true,
-      model: 'nova-2',
-      language: 'en-US'
+    if (!agent_id || !to) {
+      return res.status(400).json({ error: 'Agent ID and phone number are required' });
+    }
+
+    const agent = await Agent.findById(agent_id);
+    if (!agent) {
+      return res.status(404).json({ error: 'Agent not found' });
+    }
+
+    const callbackUrl = `${config.app.baseUrl}/api/calls/twiml/${agent_id}`;
+    const callResult = await twilioService.makeOutboundCall(to, agent_id, callbackUrl);
+
+    const conversation = await Conversation.create({
+      agent_id,
+      call_sid: callResult.callSid,
+      direction: 'outbound',
+      customer_number: to
     });
 
-    // Handle the transcription results
-    deepgramLive.addListener('transcriptReceived', async (transcription) => {
-      const transcript = transcription?.channel?.alternatives?.[0]?.transcript || '';
-      if (transcript) {
-        // Process the transcript through LLM
-        const messages = [
-          { role: 'system', content: await readPrompt() },
-          { role: 'user', content: transcript }
-        ];
-        
-        const llmReply = await callLLM(messages);
-        
-        // Synthesize speech using Deepgram
-        const audioBuffer = await synthesiseSpeech(llmReply);
-        
-        // Here you would need to store the audio buffer and create a URL
-        // that Twilio can access to play it back
-        // For now, we'll use Twilio's say as fallback
-        const twiml = buildSayResponse(llmReply);
-        res.type('text/xml').send(twiml);
-      }
-    });
+    res.json({ ...callResult, conversation_id: conversation.id });
+  } catch (error) {
+    console.error('Error making outbound call:', error);
+    res.status(500).json({ error: 'Failed to initiate call' });
+  }
+});
 
-    // Pipe the incoming audio to Deepgram
-    req.pipe(deepgramLive);
+router.post('/twiml/:agentId', async (req, res) => {
+  try {
+    const agentId = req.params.agentId;
+    const agent = await Agent.findById(agentId);
 
-  } catch (err) {
-    console.error('Streaming error:', err);
-    const twiml = buildSayResponse('Sorry, there was an error processing your speech.');
+    if (!agent) {
+      return res.status(404).send('Agent not found');
+    }
+
+    const twilioData = twilioService.parseTwilioRequest(req.body);
+    let conversation = await Conversation.findByCallSid(twilioData.callSid);
+
+    if (!conversation) {
+      conversation = await Conversation.create({
+        agent_id: agentId,
+        call_sid: twilioData.callSid,
+        direction: twilioData.direction || 'inbound',
+        customer_number: twilioData.from
+      });
+    }
+
+    let twiml;
+    if (twilioData.speechResult) {
+      await Conversation.addMessage(conversation.id, 'user', twilioData.speechResult);
+
+      const messages = await Conversation.getMessages(conversation.id);
+      const aiResponse = await aiService.generateResponse(
+        messages.map(m => ({ role: m.role, content: m.content })),
+        agent.prompt
+      );
+
+      await Conversation.addMessage(conversation.id, 'assistant', aiResponse);
+
+      const ttsResult = await aiService.generateTTS(aiResponse, agent.voice);
+      await Conversation.update(conversation.id, { audio_url: ttsResult.url });
+
+      twiml = twilioService.generateTwiml(ttsResult.url, `${config.app.baseUrl}/api/calls/twiml/${agentId}`);
+    } else {
+      const greeting = `Hello! This is ${agent.name}. How can I help you today?`;
+      const ttsResult = await aiService.generateTTS(greeting, agent.voice);
+
+      await Conversation.addMessage(conversation.id, 'assistant', greeting);
+      await Conversation.update(conversation.id, { audio_url: ttsResult.url });
+
+      twiml = twilioService.generateTwiml(ttsResult.url, `${config.app.baseUrl}/api/calls/twiml/${agentId}`);
+    }
+
     res.type('text/xml').send(twiml);
+  } catch (error) {
+    console.error('Error handling Twilio webhook:', error);
+    const twiml = twilioService.generateTwiml();
+    res.type('text/xml').send(twiml);
+  }
+});
+
+router.post('/status', async (req, res) => {
+  try {
+    const { CallSid, CallStatus, RecordingUrl } = req.body;
+
+    const conversation = await Conversation.findByCallSid(CallSid);
+    if (conversation) {
+      const updates = { recording_url: RecordingUrl };
+
+      if (CallStatus === 'completed') {
+        const messages = await Conversation.getMessages(conversation.id);
+        const transcription = messages.map(m => `${m.role}: ${m.content}`).join('\n');
+
+        const analysis = await aiService.analyzeConversation(transcription, messages);
+        updates.transcription = transcription;
+        updates.analysis = JSON.stringify(analysis);
+        updates.rating = analysis.rating;
+        updates.success = analysis.rating >= 7;
+      }
+
+      await Conversation.update(conversation.id, updates);
+    }
+
+    res.sendStatus(200);
+  } catch (error) {
+    console.error('Error handling call status:', error);
+    res.sendStatus(500);
+  }
+});
+
+router.get('/analytics/:agentId?', async (req, res) => {
+  try {
+    const analytics = await Conversation.getAnalytics(req.params.agentId);
+    res.json(analytics);
+  } catch (error) {
+    console.error('Error fetching analytics:', error);
+    res.status(500).json({ error: 'Failed to fetch analytics' });
   }
 });
 

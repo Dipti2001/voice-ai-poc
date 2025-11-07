@@ -60,7 +60,13 @@ async function callOpenRouter(messages) {
   };
   const body = JSON.stringify({
     model: config.llm.model,
-    messages
+    messages,
+    max_tokens: 40, // Allow for more natural, enthusiastic responses
+    temperature: 0.8, // Higher temperature for more natural, varied responses
+    top_p: 0.8,
+    frequency_penalty: 0,
+    presence_penalty: 0,
+    stream: false // Ensure non-streaming for fastest response
   });
   const res = await fetch(url, { method: 'POST', headers, body });
   if (!res.ok) {

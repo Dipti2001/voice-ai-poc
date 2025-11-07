@@ -1,17 +1,30 @@
 {
-  "name": "voice-ai-poc",
-  "version": "1.0.0",
-  "description": "Proof‑of‑concept Voice AI platform with multi‑tenant agents, Deepgram ASR/TTS and configurable LLM",
+  "name": "voice-ai-agent-system",
+  "version": "2.0.0",
+  "description": "Sophisticated Voice AI Agent System with multi-agent support, real-time processing, and web management interface",
   "main": "src/index.js",
   "type": "module",
   "scripts": {
-    "start": "node src/index.js"
+    "start": "node src/index.js",
+    "dev": "node --watch src/index.js",
+    "init-db": "node scripts/init-db.js",
+    "test": "node --test"
   },
   "dependencies": {
     "@deepgram/sdk": "^4.11.2",
     "dotenv": "^16.4.5",
     "express": "^4.21.1",
     "node-fetch": "^3.3.2",
-    "twilio": "^5.3.4"
+    "twilio": "^5.3.4",
+    "sqlite3": "^5.1.6",
+    "ws": "^8.17.1",
+    "uuid": "^10.0.0",
+    "multer": "^1.4.5-lts.1",
+    "cors": "^2.8.5",
+    "helmet": "^7.1.0",
+    "express-rate-limit": "^7.4.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
   }
 }

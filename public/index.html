@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Voice AI Agent System</title>
+    <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🎯 Voice AI Agent System</h1>
+            <nav>
+                <button id="agents-tab" class="tab active">Agents</button>
+                <button id="calls-tab" class="tab">Calls</button>
+                <button id="analytics-tab" class="tab">Analytics</button>
+            </nav>
+        </header>
+
+        <main>
+            <div id="agents-section" class="section active">
+                <div class="section-header">
+                    <h2>AI Agents</h2>
+                    <button id="create-agent-btn" class="btn primary">Create Agent</button>
+                </div>
+                <div id="agents-list" class="grid">
+                    <!-- Agents will be loaded here -->
+                </div>
+            </div>
+
+            <div id="calls-section" class="section">
+                <div class="section-header">
+                    <h2>Call Management</h2>
+                    <button id="make-call-btn" class="btn primary">Make Call</button>
+                </div>
+                <div id="calls-list" class="grid">
+                    <!-- Calls will be loaded here -->
+                </div>
+            </div>
+
+            <div id="analytics-section" class="section">
+                <div class="section-header">
+                    <h2>Analytics Dashboard</h2>
+                </div>
+                <div id="analytics-content" class="analytics-grid">
+                    <!-- Analytics will be loaded here -->
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Agent Modal -->
+    <div id="agent-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="agent-modal-title">Create Agent</h3>
+                <span class="modal-close">&times;</span>
+            </div>
+            <form id="agent-form">
+                <div class="form-group">
+                    <label for="agent-name">Name</label>
+                    <input type="text" id="agent-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="agent-type">Type</label>
+                    <select id="agent-type">
+                        <option value="sales">Sales</option>
+                        <option value="support">Support</option>
+                        <option value="info">Information</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="agent-voice">Voice</label>
+                    <select id="agent-voice">
+                        <option value="aura-asteria-en">Aura Asteria (Female)</option>
+                        <option value="aura-orion-en">Aura Orion (Male)</option>
+                        <option value="aura-luna-en">Aura Luna (Female)</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="agent-phone">Phone Number (Optional)</label>
+                    <input type="tel" id="agent-phone" placeholder="+1234567890">
+                </div>
+                <div class="form-group">
+                    <label for="agent-prompt">Prompt</label>
+                    <textarea id="agent-prompt" rows="10" required placeholder="Enter the agent's personality and instructions..."></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn secondary" onclick="closeAgentModal()">Cancel</button>
+                    <button type="submit" class="btn primary">Save Agent</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Call Modal -->
+    <div id="call-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Make Outbound Call</h3>
+                <span class="modal-close">&times;</span>
+            </div>
+            <form id="call-form">
+                <div class="form-group">
+                    <label for="call-agent">Agent</label>
+                    <select id="call-agent" required>
+                        <!-- Agents will be loaded here -->
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="call-number">Phone Number</label>
+                    <input type="tel" id="call-number" required placeholder="+1234567890">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn secondary" onclick="closeCallModal()">Cancel</button>
+                    <button type="submit" class="btn primary">Make Call</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Conversation Modal -->
+    <div id="conversation-modal" class="modal">
+        <div class="modal-content large">
+            <div class="modal-header">
+                <h3>Conversation Details</h3>
+                <span class="modal-close">&times;</span>
+            </div>
+            <div id="conversation-content">
+                <!-- Conversation details will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <script src="/js/app.js"></script>
+</body>
+</html>
