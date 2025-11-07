@@ -4,14 +4,14 @@ import db from '../database/connection.js';
 class Agent {
   static async create(agentData) {
     const id = uuidv4();
-    const { name, prompt, type = 'sales', phone_number = null, voice = 'aura-asteria-en' } = agentData;
+    const { name, prompt, type = 'sales', use_case = 'both', phone_number = null, voice = 'aura-asteria-en' } = agentData;
 
-    await db.run(
-      `INSERT INTO agents (id, name, prompt, type, phone_number, voice) VALUES (?, ?, ?, ?, ?, ?)`,
-      [id, name, prompt, type, phone_number, voice]
+    await db.getInstance().run(
+      `INSERT INTO agents (id, name, prompt, type, use_case, phone_number, voice) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [id, name, prompt, type, use_case, phone_number, voice]
     );
 
-    return { id, ...agentData, type, phone_number, voice };
+    return { id, ...agentData, type, use_case, phone_number, voice };
   }
 
   static async findById(id) {

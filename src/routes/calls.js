@@ -1,9 +1,10 @@
 import express from 'express';
 import Conversation from '../../models/Conversation.js';
 import Agent from '../../models/Agent.js';
+import Contact from '../../models/Contact.js';
 import TwilioService from '../../services/TwilioService.js';
 import AIService from '../../services/AIService.js';
-import config from '../config.js';
+import config from '../../src/config.js';
 
 const router = express.Router();
 const twilioService = new TwilioService();
@@ -37,10 +38,14 @@ router.get('/:id', async (req, res) => {
 
 router.post('/outbound', async (req, res) => {
   try {
-    const { agent_id, to } = req.body;
+    const { agent_id, to, contact_id } = req.body;
 
-    if (!agent_id || !to) {
-      return res.status(400).json({ error: 'Agent ID and phone number are required' });
+    if (!agent_id) {
+      return res.status(400).json({ error: 'Agent ID is required' });
+    }
+
+    if (!to && !contact_id) {
+      return res.status(400).json({ error: 'Either phone number or contact ID is required' });
     }
 
     const agent = await Agent.findById(agent_id);
@@ -48,17 +53,40 @@ router.post('/outbound', async (req, res) => {
       return res.status(404).json({ error: 'Agent not found' });
     }
 
+    // Check if agent supports outbound calls
+    if (agent.use_case === 'inbound') {
+      return res.status(400).json({ error: 'This agent only supports inbound calls' });
+    }
+
+    let phoneNumber = to;
+    let contact = null;
+
+    if (contact_id) {
+      contact = await Contact.findById(contact_id);
+      if (!contact) {
+        return res.status(404).json({ error: 'Contact not found' });
+      }
+      phoneNumber = contact.phone_number;
+
+      // Update contact call stats
+      await Contact.updateCallStats(contact_id);
+    }
+
     const callbackUrl = `${config.app.baseUrl}/api/calls/twiml/${agent_id}`;
-    const callResult = await twilioService.makeOutboundCall(to, agent_id, callbackUrl);
+    const callResult = await twilioService.makeOutboundCall(phoneNumber, agent_id, callbackUrl);
 
     const conversation = await Conversation.create({
       agent_id,
       call_sid: callResult.callSid,
       direction: 'outbound',
-      customer_number: to
+      customer_number: phoneNumber
     });
 
-    res.json({ ...callResult, conversation_id: conversation.id });
+    res.json({
+      ...callResult,
+      conversation_id: conversation.id,
+      contact: contact ? { id: contact.id, name: contact.name } : null
+    });
   } catch (error) {
     console.error('Error making outbound call:', error);
     res.status(500).json({ error: 'Failed to initiate call' });

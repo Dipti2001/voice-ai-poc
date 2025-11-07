@@ -10,6 +10,7 @@ class VoiceAIAgentSystem {
     init() {
         this.bindEvents();
         this.loadAgents();
+        this.loadContacts();
         this.loadCalls();
         this.loadAnalytics();
     }
@@ -17,12 +18,18 @@ class VoiceAIAgentSystem {
     bindEvents() {
         // Tab switching
         document.getElementById('agents-tab').addEventListener('click', () => this.switchTab('agents'));
+        document.getElementById('contacts-tab').addEventListener('click', () => this.switchTab('contacts'));
         document.getElementById('calls-tab').addEventListener('click', () => this.switchTab('calls'));
         document.getElementById('analytics-tab').addEventListener('click', () => this.switchTab('analytics'));
 
         // Agent modal
         document.getElementById('create-agent-btn').addEventListener('click', () => this.openAgentModal());
         document.getElementById('agent-form').addEventListener('submit', (e) => this.saveAgent(e));
+
+        // Contact modal
+        document.getElementById('create-contact-btn').addEventListener('click', () => this.openContactModal());
+        document.getElementById('contact-form').addEventListener('submit', (e) => this.saveContact(e));
+        document.getElementById('contact-search').addEventListener('input', (e) => this.searchContacts(e.target.value));
 
         // Call modal
         document.getElementById('make-call-btn').addEventListener('click', () => this.openCallModal());
@@ -79,6 +86,7 @@ class VoiceAIAgentSystem {
             card.innerHTML = `
                 <h3>${agent.name}</h3>
                 <p><strong>Type:</strong> ${agent.type}</p>
+                <p><strong>Use Case:</strong> ${agent.use_case}</p>
                 <p><strong>Voice:</strong> ${agent.voice}</p>
                 ${agent.phone_number ? `<p><strong>Phone:</strong> ${agent.phone_number}</p>` : ''}
                 <p class="prompt-preview">${agent.prompt.substring(0, 100)}...</p>
@@ -172,6 +180,7 @@ class VoiceAIAgentSystem {
             title.textContent = 'Edit Agent';
             document.getElementById('agent-name').value = agent.name;
             document.getElementById('agent-type').value = agent.type;
+            document.getElementById('agent-use-case').value = agent.use_case || 'both';
             document.getElementById('agent-voice').value = agent.voice;
             document.getElementById('agent-phone').value = agent.phone_number || '';
             document.getElementById('agent-prompt').value = agent.prompt;
@@ -179,6 +188,7 @@ class VoiceAIAgentSystem {
         } else {
             title.textContent = 'Create Agent';
             form.reset();
+            document.getElementById('agent-use-case').value = 'both';
             delete form.dataset.agentId;
         }
 
@@ -196,6 +206,7 @@ class VoiceAIAgentSystem {
         const agentData = {
             name: formData.get('agent-name'),
             type: formData.get('agent-type'),
+            use_case: formData.get('agent-use-case'),
             voice: formData.get('agent-voice'),
             phone_number: formData.get('agent-phone'),
             prompt: formData.get('agent-prompt')
@@ -232,21 +243,161 @@ class VoiceAIAgentSystem {
         }
     }
 
-    async deleteAgent(agentId) {
-        if (!confirm('Are you sure you want to delete this agent?')) return;
+    async loadContacts(search = null) {
+        try {
+            const url = search ? `/api/contacts?search=${encodeURIComponent(search)}` : '/api/contacts';
+            const response = await fetch(url);
+            const contacts = await response.json();
+            this.renderContacts(contacts);
+        } catch (error) {
+            console.error('Error loading contacts:', error);
+            this.showError('Failed to load contacts');
+        }
+    }
+
+    renderContacts(contacts) {
+        const container = document.getElementById('contacts-list');
+        container.innerHTML = '';
+
+        if (contacts.length === 0) {
+            container.innerHTML = '<p class="empty-state">No contacts found. Add your first contact to get started.</p>';
+            return;
+        }
+
+        contacts.forEach(contact => {
+            const tags = contact.tags ? JSON.parse(contact.tags) : [];
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.innerHTML = `
+                <h3>${contact.name}</h3>
+                <p><strong>Phone:</strong> ${contact.phone_number}</p>
+                ${contact.email ? `<p><strong>Email:</strong> ${contact.email}</p>` : ''}
+                ${contact.company ? `<p><strong>Company:</strong> ${contact.company}</p>` : ''}
+                ${contact.call_count > 0 ? `<p><strong>Calls:</strong> ${contact.call_count}</p>` : ''}
+                ${tags.length > 0 ? `<p><strong>Tags:</strong> ${tags.join(', ')}</p>` : ''}
+                <div class="card-actions">
+                    <button class="btn primary" onclick="app.callContact('${contact.id}')">Call</button>
+                    <button class="btn secondary" onclick="app.editContact('${contact.id}')">Edit</button>
+                    <button class="btn danger" onclick="app.deleteContact('${contact.id}')">Delete</button>
+                </div>
+            `;
+            container.appendChild(card);
+        });
+    }
+
+    openContactModal(contact = null) {
+        const modal = document.getElementById('contact-modal');
+        const form = document.getElementById('contact-form');
+        const title = document.getElementById('contact-modal-title');
+
+        if (contact) {
+            title.textContent = 'Edit Contact';
+            document.getElementById('contact-name').value = contact.name;
+            document.getElementById('contact-phone').value = contact.phone_number;
+            document.getElementById('contact-email').value = contact.email || '';
+            document.getElementById('contact-company').value = contact.company || '';
+            document.getElementById('contact-notes').value = contact.notes || '';
+            document.getElementById('contact-tags').value = contact.tags ? JSON.parse(contact.tags).join(', ') : '';
+            form.dataset.contactId = contact.id;
+        } else {
+            title.textContent = 'Add Contact';
+            form.reset();
+            delete form.dataset.contactId;
+        }
+
+        modal.classList.add('show');
+    }
+
+    closeContactModal() {
+        document.getElementById('contact-modal').classList.remove('show');
+    }
+
+    async saveContact(e) {
+        e.preventDefault();
+
+        const formData = new FormData(e.target);
+        const tagsString = formData.get('contact-tags');
+        const tags = tagsString ? tagsString.split(',').map(tag => tag.trim()).filter(tag => tag) : null;
+
+        const contactData = {
+            name: formData.get('contact-name'),
+            phone_number: formData.get('contact-phone'),
+            email: formData.get('contact-email'),
+            company: formData.get('contact-company'),
+            notes: formData.get('contact-notes'),
+            tags: tags
+        };
 
         try {
-            const response = await fetch(`/api/agents/${agentId}`, { method: 'DELETE' });
-            if (response.ok) {
-                this.loadAgents();
-                this.showSuccess('Agent deleted successfully');
+            const contactId = e.target.dataset.contactId;
+            let response;
+
+            if (contactId) {
+                response = await fetch(`/api/contacts/${contactId}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(contactData)
+                });
             } else {
-                throw new Error('Failed to delete agent');
+                response = await fetch('/api/contacts', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(contactData)
+                });
+            }
+
+            if (response.ok) {
+                this.closeContactModal();
+                this.loadContacts();
+                this.showSuccess(contactId ? 'Contact updated successfully' : 'Contact added successfully');
+            } else {
+                const error = await response.json();
+                throw new Error(error.error || 'Failed to save contact');
             }
         } catch (error) {
-            console.error('Error deleting agent:', error);
-            this.showError('Failed to delete agent');
+            console.error('Error saving contact:', error);
+            this.showError(error.message);
         }
+    }
+
+    async deleteContact(contactId) {
+        if (!confirm('Are you sure you want to delete this contact?')) return;
+
+        try {
+            const response = await fetch(`/api/contacts/${contactId}`, { method: 'DELETE' });
+            if (response.ok) {
+                this.loadContacts();
+                this.showSuccess('Contact deleted successfully');
+            } else {
+                throw new Error('Failed to delete contact');
+            }
+        } catch (error) {
+            console.error('Error deleting contact:', error);
+            this.showError('Failed to delete contact');
+        }
+    }
+
+    editContact(contactId) {
+        // Find contact from current list (could be optimized with caching)
+        const contactCard = document.querySelector(`[onclick*="editContact('${contactId}')"]`);
+        if (contactCard) {
+            // Extract contact data from DOM (simplified approach)
+            this.openContactModal({ id: contactId });
+        }
+    }
+
+    async callContact(contactId) {
+        try {
+            const contact = await (await fetch(`/api/contacts/${contactId}`)).json();
+            this.openCallModal(contact);
+        } catch (error) {
+            console.error('Error loading contact for call:', error);
+            this.showError('Failed to load contact');
+        }
+    }
+
+    searchContacts(query) {
+        this.loadContacts(query);
     }
 
     editAgent(agentId) {
@@ -258,9 +409,10 @@ class VoiceAIAgentSystem {
         }
     }
 
-    openCallModal() {
+    openCallModal(contact = null) {
         const modal = document.getElementById('call-modal');
         const agentSelect = document.getElementById('call-agent');
+        const numberInput = document.getElementById('call-number');
 
         // Load agents into select
         fetch('/api/agents')
@@ -268,13 +420,26 @@ class VoiceAIAgentSystem {
             .then(agents => {
                 agentSelect.innerHTML = '<option value="">Select an agent</option>';
                 agents.forEach(agent => {
-                    agentSelect.innerHTML += `<option value="${agent.id}">${agent.name}</option>`;
+                    if (agent.use_case === 'outbound' || agent.use_case === 'both') {
+                        agentSelect.innerHTML += `<option value="${agent.id}">${agent.name} (${agent.type})</option>`;
+                    }
                 });
             })
             .catch(error => {
                 console.error('Error loading agents for call:', error);
                 this.showError('Failed to load agents');
             });
+
+        // Pre-fill contact info if provided
+        if (contact) {
+            numberInput.value = contact.phone_number;
+            document.getElementById('call-contact-id').value = contact.id;
+            modal.querySelector('h3').textContent = `Call ${contact.name}`;
+        } else {
+            numberInput.value = '';
+            document.getElementById('call-contact-id').value = '';
+            modal.querySelector('h3').textContent = 'Make Outbound Call';
+        }
 
         modal.classList.add('show');
     }
@@ -285,7 +450,8 @@ class VoiceAIAgentSystem {
         const formData = new FormData(e.target);
         const callData = {
             agent_id: formData.get('call-agent'),
-            to: formData.get('call-number')
+            to: formData.get('call-number'),
+            contact_id: formData.get('call-contact-id') // Hidden field for contact ID
         };
 
         try {

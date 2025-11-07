@@ -6,13 +6,16 @@ A sophisticated **multi-agent voice AI platform** that enables natural conversat
 
 ### 🤖 **Multi-Agent Management**
 - Create and manage multiple AI agents with custom personalities
+- **Use Case Configuration**: Specify inbound-only, outbound-only, or both
 - Configurable prompts, voices, and phone numbers per agent
 - Agent-specific conversation analytics and performance tracking
 
-### 📞 **Advanced Telephony**
-- Inbound and outbound call handling via Twilio
-- Real-time audio streaming with WebSocket support
-- Call recording and storage with automatic transcription
+### 👥 **Contact Management**
+- Comprehensive contact database with phone numbers, emails, and company info
+- Tag-based organization and search functionality
+- Call history tracking and statistics per contact
+- Direct calling from contact records
+- Integration with outbound calling system
 
 ### 🗣️ **High-Quality Speech Processing**
 - **ASR**: Deepgram Nova-2 for 95%+ accurate speech recognition

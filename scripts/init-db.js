@@ -19,8 +19,25 @@ async function initializeDatabase() {
           name TEXT NOT NULL,
           prompt TEXT NOT NULL,
           type TEXT DEFAULT 'sales',
+          use_case TEXT CHECK(use_case IN ('inbound', 'outbound', 'both')) DEFAULT 'both',
           phone_number TEXT,
           voice TEXT DEFAULT 'aura-asteria-en',
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+      `);
+
+      db.run(`
+        CREATE TABLE IF NOT EXISTS contacts (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          phone_number TEXT NOT NULL UNIQUE,
+          email TEXT,
+          company TEXT,
+          notes TEXT,
+          tags TEXT,
+          last_called DATETIME,
+          call_count INTEGER DEFAULT 0,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
           updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
         );

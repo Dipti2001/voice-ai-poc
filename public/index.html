@@ -12,6 +12,7 @@
             <h1>🎯 Voice AI Agent System</h1>
             <nav>
                 <button id="agents-tab" class="tab active">Agents</button>
+                <button id="contacts-tab" class="tab">Contacts</button>
                 <button id="calls-tab" class="tab">Calls</button>
                 <button id="analytics-tab" class="tab">Analytics</button>
             </nav>
@@ -25,6 +26,19 @@
                 </div>
                 <div id="agents-list" class="grid">
                     <!-- Agents will be loaded here -->
+                </div>
+            </div>
+
+            <div id="contacts-section" class="section">
+                <div class="section-header">
+                    <h2>Contact List</h2>
+                    <button id="create-contact-btn" class="btn primary">Add Contact</button>
+                </div>
+                <div class="search-bar">
+                    <input type="text" id="contact-search" placeholder="Search contacts..." class="search-input">
+                </div>
+                <div id="contacts-list" class="grid">
+                    <!-- Contacts will be loaded here -->
                 </div>
             </div>
 
@@ -70,6 +84,14 @@
                     </select>
                 </div>
                 <div class="form-group">
+                    <label for="agent-use-case">Use Case</label>
+                    <select id="agent-use-case">
+                        <option value="both">Both Inbound & Outbound</option>
+                        <option value="inbound">Inbound Only</option>
+                        <option value="outbound">Outbound Only</option>
+                    </select>
+                </div>
+                <div class="form-group">
                     <label for="agent-voice">Voice</label>
                     <select id="agent-voice">
                         <option value="aura-asteria-en">Aura Asteria (Female)</option>
@@ -101,6 +123,7 @@
                 <span class="modal-close">&times;</span>
             </div>
             <form id="call-form">
+                <input type="hidden" id="call-contact-id">
                 <div class="form-group">
                     <label for="call-agent">Agent</label>
                     <select id="call-agent" required>
@@ -132,6 +155,44 @@
         </div>
     </div>
 
-    <script src="/js/app.js"></script>
+    <!-- Contact Modal -->
+    <div id="contact-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3 id="contact-modal-title">Add Contact</h3>
+                <span class="modal-close">&times;</span>
+            </div>
+            <form id="contact-form">
+                <div class="form-group">
+                    <label for="contact-name">Name</label>
+                    <input type="text" id="contact-name" required>
+                </div>
+                <div class="form-group">
+                    <label for="contact-phone">Phone Number</label>
+                    <input type="tel" id="contact-phone" required placeholder="+1234567890">
+                </div>
+                <div class="form-group">
+                    <label for="contact-email">Email (Optional)</label>
+                    <input type="email" id="contact-email">
+                </div>
+                <div class="form-group">
+                    <label for="contact-company">Company (Optional)</label>
+                    <input type="text" id="contact-company">
+                </div>
+                <div class="form-group">
+                    <label for="contact-notes">Notes (Optional)</label>
+                    <textarea id="contact-notes" rows="3" placeholder="Additional notes about this contact..."></textarea>
+                </div>
+                <div class="form-group">
+                    <label for="contact-tags">Tags (Optional)</label>
+                    <input type="text" id="contact-tags" placeholder="Comma-separated tags (e.g., vip, prospect, customer)">
+                </div>
+                <div class="form-actions">
+                    <button type="button" class="btn secondary" onclick="closeContactModal()">Cancel</button>
+                    <button type="submit" class="btn primary">Save Contact</button>
+                </div>
+            </form>
+        </div>
+    </div>    <script src="/js/app.js"></script>
 </body>
 </html>

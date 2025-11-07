@@ -8,6 +8,7 @@ import db from '../database/connection.js';
 import WebSocketService from '../services/WebSocketService.js';
 import callRoutes from './routes/calls.js';
 import agentRoutes from './routes/agents.js';
+import contactRoutes from './routes/contacts.js';
 
 const app = express();
 const server = createServer(app);
@@ -33,6 +34,7 @@ app.use('/audio', express.static('public/audio'));
 // API Routes
 app.use('/api/agents', agentRoutes);
 app.use('/api/calls', callRoutes);
+app.use('/api/contacts', contactRoutes);
 
 // Health check endpoint
 app.get('/health', (req, res) => {
