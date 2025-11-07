@@ -93,29 +93,79 @@ router.post('/outbound', async (req, res) => {
   }
 });
 
+router.post('/twiml', async (req, res) => {
+  try {
+    // Handle inbound calls without specific agent - use default or first available inbound agent
+    const agents = await Agent.findAll();
+    const inboundAgents = agents.filter(agent => 
+      agent.use_case === 'inbound' || agent.use_case === 'both'
+    );
+
+    if (inboundAgents.length === 0) {
+      console.error('No inbound agents available');
+      const twiml = twilioService.generateTwiml();
+      return res.type('text/xml').send(twiml);
+    }
+
+    // Use first available inbound agent or agent with phone number matching the called number
+    const twilioData = twilioService.parseTwilioRequest(req.body);
+    let selectedAgent = inboundAgents.find(agent => agent.phone_number === twilioData.to);
+    
+    if (!selectedAgent) {
+      selectedAgent = inboundAgents[0]; // Use first available
+    }
+
+    console.log(`Inbound call routed to agent: ${selectedAgent.name} (${selectedAgent.id})`);
+    
+    // Redirect to agent-specific handler
+    req.params.agentId = selectedAgent.id;
+    return handleAgentCall(req, res, selectedAgent);
+  } catch (error) {
+    console.error('Error handling default inbound call:', error);
+    const twiml = twilioService.generateTwiml();
+    res.type('text/xml').send(twiml);
+  }
+});
+
 router.post('/twiml/:agentId', async (req, res) => {
   try {
     const agentId = req.params.agentId;
     const agent = await Agent.findById(agentId);
 
     if (!agent) {
+      console.error(`Agent not found: ${agentId}`);
       return res.status(404).send('Agent not found');
     }
 
+    return handleAgentCall(req, res, agent);
+  } catch (error) {
+    console.error('Error handling Twilio webhook:', error);
+    const twiml = twilioService.generateTwiml();
+    res.type('text/xml').send(twiml);
+  }
+});
+
+// Shared function to handle agent calls
+async function handleAgentCall(req, res, agent) {
+  try {
     const twilioData = twilioService.parseTwilioRequest(req.body);
+    console.log(`Call handling - Agent: ${agent.name}, From: ${twilioData.from}, CallSid: ${twilioData.callSid}`);
+    
     let conversation = await Conversation.findByCallSid(twilioData.callSid);
 
     if (!conversation) {
       conversation = await Conversation.create({
-        agent_id: agentId,
+        agent_id: agent.id,
         call_sid: twilioData.callSid,
         direction: twilioData.direction || 'inbound',
         customer_number: twilioData.from
       });
+      console.log(`Created new conversation: ${conversation.id}`);
     }
 
     let twiml;
     if (twilioData.speechResult) {
+      console.log(`Speech received: ${twilioData.speechResult}`);
       await Conversation.addMessage(conversation.id, 'user', twilioData.speechResult);
 
       const messages = await Conversation.getMessages(conversation.id);
@@ -124,29 +174,32 @@ router.post('/twiml/:agentId', async (req, res) => {
         agent.prompt
       );
 
+      console.log(`AI Response: ${aiResponse}`);
       await Conversation.addMessage(conversation.id, 'assistant', aiResponse);
 
       const ttsResult = await aiService.generateTTS(aiResponse, agent.voice);
       await Conversation.update(conversation.id, { audio_url: ttsResult.url });
 
-      twiml = twilioService.generateTwiml(ttsResult.url, `${config.app.baseUrl}/api/calls/twiml/${agentId}`);
+      twiml = twilioService.generateTwiml(ttsResult.url, `${config.app.baseUrl}/api/calls/twiml/${agent.id}`);
     } else {
       const greeting = `Hello! This is ${agent.name}. How can I help you today?`;
+      console.log(`Sending greeting: ${greeting}`);
+      
       const ttsResult = await aiService.generateTTS(greeting, agent.voice);
 
       await Conversation.addMessage(conversation.id, 'assistant', greeting);
       await Conversation.update(conversation.id, { audio_url: ttsResult.url });
 
-      twiml = twilioService.generateTwiml(ttsResult.url, `${config.app.baseUrl}/api/calls/twiml/${agentId}`);
+      twiml = twilioService.generateTwiml(ttsResult.url, `${config.app.baseUrl}/api/calls/twiml/${agent.id}`);
     }
 
     res.type('text/xml').send(twiml);
   } catch (error) {
-    console.error('Error handling Twilio webhook:', error);
+    console.error('Error in handleAgentCall:', error);
     const twiml = twilioService.generateTwiml();
     res.type('text/xml').send(twiml);
   }
-});
+}
 
 router.post('/status', async (req, res) => {
   try {

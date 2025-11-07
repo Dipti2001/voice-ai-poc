@@ -75,15 +75,15 @@ class AIService {
         { text },
         {
           model: voice,
-          encoding: 'mp3',
-          container: 'mp3'
+          encoding: 'wav',
+          container: 'wav'
         }
       );
 
       const audioBuffer = await response.getStream();
       const audioData = await this.streamToBuffer(audioBuffer);
 
-      const filename = `${uuidv4()}.mp3`;
+      const filename = `${uuidv4()}.wav`;
       const filepath = path.join(config.audio.storagePath, filename);
 
       await fs.writeFile(filepath, audioData);
