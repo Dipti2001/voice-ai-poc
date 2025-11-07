@@ -75,7 +75,7 @@ class AIService {
         { text },
         {
           model: voice,
-          encoding: 'wav',
+          encoding: 'linear16',
           container: 'wav'
         }
       );

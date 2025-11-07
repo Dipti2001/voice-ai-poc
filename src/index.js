@@ -13,6 +13,9 @@ import contactRoutes from './routes/contacts.js';
 const app = express();
 const server = createServer(app);
 
+// Trust proxy for Railway deployment
+app.set('trust proxy', true);
+
 // Middleware
 app.use(helmet());
 app.use(cors({ origin: config.security.corsOrigin }));

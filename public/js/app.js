@@ -404,6 +404,19 @@ class VoiceAIAgentSystem {
         this.loadContacts(query);
     }
 
+    editAgent(agentId) {
+        // Fetch agent data from API
+        fetch(`/api/agents/${agentId}`)
+            .then(response => response.json())
+            .then(agent => {
+                this.openAgentModal(agent);
+            })
+            .catch(error => {
+                console.error('Error loading agent for edit:', error);
+                this.showError('Failed to load agent');
+            });
+    }
+
     async deleteAgent(agentId) {
         if (!confirm('Are you sure you want to delete this agent?')) return;
 

@@ -95,7 +95,10 @@ router.post('/outbound', async (req, res) => {
 
 router.post('/twiml', async (req, res) => {
   try {
-    // Handle inbound calls without specific agent - use default or first available inbound agent
+    const twilioData = twilioService.parseTwilioRequest(req.body);
+    console.log(`Inbound call - From: ${twilioData.from}, To: ${twilioData.to}, CallSid: ${twilioData.callSid}`);
+    
+    // Method 1: Route by called phone number (if agent has specific phone number)
     const agents = await Agent.findAll();
     const inboundAgents = agents.filter(agent => 
       agent.use_case === 'inbound' || agent.use_case === 'both'
@@ -103,23 +106,46 @@ router.post('/twiml', async (req, res) => {
 
     if (inboundAgents.length === 0) {
       console.error('No inbound agents available');
-      const twiml = twilioService.generateTwiml();
+      const twiml = twilioService.generateNoAgentTwiml();
       return res.type('text/xml').send(twiml);
     }
 
-    // Use first available inbound agent or agent with phone number matching the called number
-    const twilioData = twilioService.parseTwilioRequest(req.body);
-    let selectedAgent = inboundAgents.find(agent => agent.phone_number === twilioData.to);
-    
-    if (!selectedAgent) {
-      selectedAgent = inboundAgents[0]; // Use first available
+    // Method 2: Check if this is a digit selection (agent menu choice)
+    if (twilioData.digits) {
+      const selectedIndex = parseInt(twilioData.digits) - 1;
+      if (selectedIndex >= 0 && selectedIndex < inboundAgents.length) {
+        const selectedAgent = inboundAgents[selectedIndex];
+        console.log(`Agent selected via menu: ${selectedAgent.name} (${selectedAgent.id})`);
+        return handleAgentCall(req, res, selectedAgent);
+      } else {
+        // Invalid selection, show menu again
+        const twiml = twilioService.generateAgentSelectionMenu(inboundAgents);
+        return res.type('text/xml').send(twiml);
+      }
     }
 
-    console.log(`Inbound call routed to agent: ${selectedAgent.name} (${selectedAgent.id})`);
+    // Method 3: Route by exact phone number match
+    let selectedAgent = inboundAgents.find(agent => 
+      agent.phone_number && agent.phone_number === twilioData.to
+    );
     
-    // Redirect to agent-specific handler
-    req.params.agentId = selectedAgent.id;
+    if (selectedAgent) {
+      console.log(`Agent found by phone number: ${selectedAgent.name} (${selectedAgent.phone_number})`);
+      return handleAgentCall(req, res, selectedAgent);
+    }
+
+    // Method 4: Multiple agents available - show selection menu
+    if (inboundAgents.length > 1) {
+      console.log(`Multiple agents available, showing selection menu`);
+      const twiml = twilioService.generateAgentSelectionMenu(inboundAgents);
+      return res.type('text/xml').send(twiml);
+    }
+
+    // Method 5: Single agent fallback
+    selectedAgent = inboundAgents[0];
+    console.log(`Single agent fallback: ${selectedAgent.name} (${selectedAgent.id})`);
     return handleAgentCall(req, res, selectedAgent);
+    
   } catch (error) {
     console.error('Error handling default inbound call:', error);
     const twiml = twilioService.generateTwiml();
@@ -227,6 +253,30 @@ router.post('/status', async (req, res) => {
   } catch (error) {
     console.error('Error handling call status:', error);
     res.sendStatus(500);
+  }
+});
+
+router.post('/voicemail', async (req, res) => {
+  try {
+    const { CallSid, RecordingUrl, From } = req.body;
+    console.log(`Voicemail received - From: ${From}, CallSid: ${CallSid}, Recording: ${RecordingUrl}`);
+    
+    // Create a conversation record for the voicemail
+    await Conversation.create({
+      agent_id: null, // No agent assigned
+      call_sid: CallSid,
+      direction: 'inbound',
+      customer_number: From,
+      recording_url: RecordingUrl,
+      transcription: 'Voicemail - No agents available'
+    });
+
+    // Simple response
+    const twiml = '<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>';
+    res.type('text/xml').send(twiml);
+  } catch (error) {
+    console.error('Error handling voicemail:', error);
+    res.sendStatus(200); // Always respond 200 to Twilio
   }
 });
 
