@@ -73,11 +73,11 @@
             <form id="agent-form">
                 <div class="form-group">
                     <label for="agent-name">Name</label>
-                    <input type="text" id="agent-name" required>
+                    <input type="text" id="agent-name" name="agent-name" required>
                 </div>
                 <div class="form-group">
                     <label for="agent-type">Type</label>
-                    <select id="agent-type">
+                    <select id="agent-type" name="agent-type">
                         <option value="sales">Sales</option>
                         <option value="support">Support</option>
                         <option value="info">Information</option>
@@ -85,7 +85,7 @@
                 </div>
                 <div class="form-group">
                     <label for="agent-use-case">Use Case</label>
-                    <select id="agent-use-case">
+                    <select id="agent-use-case" name="agent-use-case">
                         <option value="both">Both Inbound & Outbound</option>
                         <option value="inbound">Inbound Only</option>
                         <option value="outbound">Outbound Only</option>
@@ -93,7 +93,7 @@
                 </div>
                 <div class="form-group">
                     <label for="agent-voice">Voice</label>
-                    <select id="agent-voice">
+                    <select id="agent-voice" name="agent-voice">
                         <option value="aura-asteria-en">Aura Asteria (Female)</option>
                         <option value="aura-orion-en">Aura Orion (Male)</option>
                         <option value="aura-luna-en">Aura Luna (Female)</option>
@@ -101,11 +101,11 @@
                 </div>
                 <div class="form-group">
                     <label for="agent-phone">Phone Number (Optional)</label>
-                    <input type="tel" id="agent-phone" placeholder="+1234567890">
+                    <input type="tel" id="agent-phone" name="agent-phone" placeholder="+1234567890">
                 </div>
                 <div class="form-group">
                     <label for="agent-prompt">Prompt</label>
-                    <textarea id="agent-prompt" rows="10" required placeholder="Enter the agent's personality and instructions..."></textarea>
+                    <textarea id="agent-prompt" name="agent-prompt" rows="10" required placeholder="Enter the agent's personality and instructions..."></textarea>
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn secondary" onclick="app.closeAllModals()">Cancel</button>
@@ -123,16 +123,16 @@
                 <span class="modal-close">&times;</span>
             </div>
             <form id="call-form">
-                <input type="hidden" id="call-contact-id">
+                <input type="hidden" id="call-contact-id" name="call-contact-id">
                 <div class="form-group">
                     <label for="call-agent">Agent</label>
-                    <select id="call-agent" required>
+                    <select id="call-agent" name="call-agent" required>
                         <!-- Agents will be loaded here -->
                     </select>
                 </div>
                 <div class="form-group">
                     <label for="call-number">Phone Number</label>
-                    <input type="tel" id="call-number" required placeholder="+1234567890">
+                    <input type="tel" id="call-number" name="call-number" required placeholder="+1234567890">
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn secondary" onclick="app.closeAllModals()">Cancel</button>
@@ -165,27 +165,27 @@
             <form id="contact-form">
                 <div class="form-group">
                     <label for="contact-name">Name</label>
-                    <input type="text" id="contact-name" required>
+                    <input type="text" id="contact-name" name="contact-name" required>
                 </div>
                 <div class="form-group">
                     <label for="contact-phone">Phone Number</label>
-                    <input type="tel" id="contact-phone" required placeholder="+1234567890">
+                    <input type="tel" id="contact-phone" name="contact-phone" required placeholder="+1234567890">
                 </div>
                 <div class="form-group">
                     <label for="contact-email">Email (Optional)</label>
-                    <input type="email" id="contact-email">
+                    <input type="email" id="contact-email" name="contact-email">
                 </div>
                 <div class="form-group">
                     <label for="contact-company">Company (Optional)</label>
-                    <input type="text" id="contact-company">
+                    <input type="text" id="contact-company" name="contact-company">
                 </div>
                 <div class="form-group">
                     <label for="contact-notes">Notes (Optional)</label>
-                    <textarea id="contact-notes" rows="3" placeholder="Additional notes about this contact..."></textarea>
+                    <textarea id="contact-notes" name="contact-notes" rows="3" placeholder="Additional notes about this contact..."></textarea>
                 </div>
                 <div class="form-group">
                     <label for="contact-tags">Tags (Optional)</label>
-                    <input type="text" id="contact-tags" placeholder="Comma-separated tags (e.g., vip, prospect, customer)">
+                    <input type="text" id="contact-tags" name="contact-tags" placeholder="Comma-separated tags (e.g., vip, prospect, customer)">
                 </div>
                 <div class="form-actions">
                     <button type="button" class="btn secondary" onclick="app.closeContactModal()">Cancel</button>
