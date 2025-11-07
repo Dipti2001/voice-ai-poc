@@ -171,9 +171,20 @@ voice-ai-agent-system/
 3. Configure:
    - **Name**: Agent's display name
    - **Type**: Sales, Support, Information, etc.
+   - **Use Case**: Inbound Only, Outbound Only, or Both
    - **Voice**: Choose from Aura Asteria, Orion, or Luna
    - **Phone Number**: Optional dedicated number
    - **Prompt**: Personality and instructions
+
+### Managing Contacts
+
+1. Navigate to the "Contacts" tab
+2. Click "Add Contact" to create new contacts
+3. Fill in contact details:
+   - Name, phone number, email, company
+   - Notes and tags for organization
+4. Use the search bar to find contacts quickly
+5. Click "Call" directly from any contact card
 
 ### Example Agent Prompt
 ```
@@ -219,6 +230,17 @@ GET    /api/agents/:id       # Get agent details
 POST   /api/agents           # Create new agent
 PUT    /api/agents/:id       # Update agent
 DELETE /api/agents/:id       # Delete agent
+```
+
+### Contact Management
+
+```http
+GET    /api/contacts         # List all contacts
+GET    /api/contacts/:id     # Get contact details
+POST   /api/contacts         # Create new contact
+PUT    /api/contacts/:id     # Update contact
+DELETE /api/contacts/:id     # Delete contact
+GET    /api/contacts/history # Get call history
 ```
 
 ### Call Operations
