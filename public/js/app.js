@@ -48,6 +48,33 @@ class VoiceAIAgentSystem {
                 if (e.target === modal) this.closeAllModals();
             });
         });
+
+        // Use event delegation for dynamically created buttons
+        document.addEventListener('click', (e) => {
+            if (e.target.classList.contains('edit-agent-btn')) {
+                const agentId = e.target.dataset.agentId;
+                this.editAgent(agentId);
+            } else if (e.target.classList.contains('delete-agent-btn')) {
+                const agentId = e.target.dataset.agentId;
+                this.deleteAgent(agentId);
+            } else if (e.target.classList.contains('edit-contact-btn')) {
+                const contactId = e.target.dataset.contactId;
+                this.editContact(contactId);
+            } else if (e.target.classList.contains('delete-contact-btn')) {
+                const contactId = e.target.dataset.contactId;
+                this.deleteContact(contactId);
+            } else if (e.target.classList.contains('call-contact-btn')) {
+                const contactId = e.target.dataset.contactId;
+                this.callContact(contactId);
+            } else if (e.target.classList.contains('view-conversation-btn')) {
+                const conversationId = e.target.dataset.conversationId;
+                this.viewConversation(conversationId);
+            } else if (e.target.classList.contains('update-callback-btn')) {
+                const callbackId = e.target.dataset.callbackId;
+                const status = e.target.dataset.status;
+                this.updateCallbackStatus(callbackId, status);
+            }
+        });
     }
 
     switchTab(tabName) {
@@ -93,12 +120,15 @@ class VoiceAIAgentSystem {
                 ${agent.phone_number ? `<p><strong>Phone:</strong> ${agent.phone_number}</p>` : ''}
                 <p class="prompt-preview">${agent.prompt.substring(0, 100)}...</p>
                 <div class="card-actions">
-                    <button class="btn secondary" onclick="app.editAgent('${agent.id}')">Edit</button>
-                    <button class="btn danger" onclick="app.deleteAgent('${agent.id}')">Delete</button>
+                    <button class="btn secondary edit-agent-btn" data-agent-id="${agent.id}">Edit</button>
+                    <button class="btn danger delete-agent-btn" data-agent-id="${agent.id}">Delete</button>
                 </div>
             `;
             container.appendChild(card);
         });
+
+        // Bind events for dynamically created buttons
+        this.bindAgentCardEvents();
     }
 
     async loadCalls() {
@@ -159,7 +189,7 @@ class VoiceAIAgentSystem {
                 ${call.rating ? `<p><strong>Rating:</strong> ${call.rating}/10</p>` : ''}
                 <p><strong>Date:</strong> ${new Date(call.created_at).toLocaleDateString()}</p>
                 <div class="card-actions">
-                    <button class="btn primary" onclick="app.viewConversation('${call.id}')">View Details</button>
+                    <button class="btn primary view-conversation-btn" data-conversation-id="${call.id}">View Details</button>
                 </div>
             `;
             container.appendChild(card);
@@ -190,9 +220,9 @@ class VoiceAIAgentSystem {
                 <p><strong>Requested:</strong> ${new Date(callback.created_at).toLocaleDateString()}</p>
                 <div class="card-actions">
                     ${callback.status === 'pending' ?
-                        `<button class="btn primary" onclick="app.updateCallbackStatus('${callback.id}', 'scheduled')">Schedule</button>
-                         <button class="btn danger" onclick="app.updateCallbackStatus('${callback.id}', 'completed')">Complete</button>` :
-                        `<button class="btn secondary" onclick="app.updateCallbackStatus('${callback.id}', 'pending')">Reopen</button>`
+                        `<button class="btn primary update-callback-btn" data-callback-id="${callback.id}" data-status="scheduled">Schedule</button>
+                         <button class="btn danger update-callback-btn" data-callback-id="${callback.id}" data-status="completed">Complete</button>` :
+                        `<button class="btn secondary update-callback-btn" data-callback-id="${callback.id}" data-status="pending">Reopen</button>`
                     }
                 </div>
             `;
@@ -338,9 +368,9 @@ class VoiceAIAgentSystem {
                 ${contact.call_count > 0 ? `<p><strong>Calls:</strong> ${contact.call_count}</p>` : ''}
                 ${tags.length > 0 ? `<p><strong>Tags:</strong> ${tags.join(', ')}</p>` : ''}
                 <div class="card-actions">
-                    <button class="btn primary" onclick="app.callContact('${contact.id}')">Call</button>
-                    <button class="btn secondary" onclick="app.editContact('${contact.id}')">Edit</button>
-                    <button class="btn danger" onclick="app.deleteContact('${contact.id}')">Delete</button>
+                    <button class="btn primary call-contact-btn" data-contact-id="${contact.id}">Call</button>
+                    <button class="btn secondary edit-contact-btn" data-contact-id="${contact.id}">Edit</button>
+                    <button class="btn danger delete-contact-btn" data-contact-id="${contact.id}">Delete</button>
                 </div>
             `;
             container.appendChild(card);
@@ -615,7 +645,11 @@ class VoiceAIAgentSystem {
 
     async updateCallbackStatus(callbackId, status) {
         try {
-            const notes = status === 'scheduled' ? prompt('Enter scheduling notes:') : '';
+            let notes = '';
+            if (status === 'scheduled') {
+                notes = 'Scheduled for callback';
+            }
+
             const response = await fetch(`/api/calls/callbacks/${callbackId}`, {
                 method: 'PUT',
                 headers: { 'Content-Type': 'application/json' },
