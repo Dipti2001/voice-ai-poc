@@ -378,12 +378,16 @@ class VoiceAIAgentSystem {
     }
 
     editContact(contactId) {
-        // Find contact from current list (could be optimized with caching)
-        const contactCard = document.querySelector(`[onclick*="editContact('${contactId}')"]`);
-        if (contactCard) {
-            // Extract contact data from DOM (simplified approach)
-            this.openContactModal({ id: contactId });
-        }
+        // Fetch contact data from API
+        fetch(`/api/contacts/${contactId}`)
+            .then(response => response.json())
+            .then(contact => {
+                this.openContactModal(contact);
+            })
+            .catch(error => {
+                console.error('Error loading contact for edit:', error);
+                this.showError('Failed to load contact');
+            });
     }
 
     async callContact(contactId) {
@@ -400,12 +404,20 @@ class VoiceAIAgentSystem {
         this.loadContacts(query);
     }
 
-    editAgent(agentId) {
-        // Find agent from current list (could be optimized with caching)
-        const agentCard = document.querySelector(`[onclick*="editAgent('${agentId}')"]`);
-        if (agentCard) {
-            // Extract agent data from DOM (simplified approach)
-            this.openAgentModal({ id: agentId });
+    async deleteAgent(agentId) {
+        if (!confirm('Are you sure you want to delete this agent?')) return;
+
+        try {
+            const response = await fetch(`/api/agents/${agentId}`, { method: 'DELETE' });
+            if (response.ok) {
+                this.loadAgents();
+                this.showSuccess('Agent deleted successfully');
+            } else {
+                throw new Error('Failed to delete agent');
+            }
+        } catch (error) {
+            console.error('Error deleting agent:', error);
+            this.showError('Failed to delete agent');
         }
     }
 
