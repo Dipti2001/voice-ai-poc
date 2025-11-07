@@ -7,6 +7,18 @@ class TwilioService {
     this.phoneNumber = config.twilio.phoneNumber;
   }
 
+  parseTwilioRequest(body) {
+    return {
+      callSid: body.CallSid,
+      from: body.From,
+      to: body.To,
+      direction: body.Direction || 'inbound',
+      speechResult: body.SpeechResult,
+      digits: body.Digits,
+      recordingUrl: body.RecordingUrl
+    };
+  }
+
   async makeOutboundCall(to, agentId, callbackUrl) {
     try {
       const call = await this.client.calls.create({
