@@ -46,16 +46,20 @@ class TwilioService {
     let twiml = '<?xml version="1.0" encoding="UTF-8"?><Response>';
 
     if (audioUrl) {
-      // Use shorter timeout and enable barge-in for natural conversation
-      twiml += `<Gather input="speech" action="${actionUrl}" method="POST" timeout="1" speechTimeout="auto" language="en-US" actionOnEmptyResult="true" bargeIn="${enableBargeIn ? 'true' : 'false'}">`;
+      // Use reasonable timeout and enable barge-in for natural conversation
+      twiml += `<Gather input="speech" action="${actionUrl}" method="POST" timeout="3" speechTimeout="auto" language="en-US" actionOnEmptyResult="false" bargeIn="${enableBargeIn ? 'true' : 'false'}">`;
       twiml += `<Play>${audioUrl}</Play>`;
       twiml += '</Gather>';
     } else {
       // For initial greeting or error cases
-      twiml += `<Gather input="speech" action="${actionUrl}" method="POST" timeout="3" speechTimeout="auto" language="en-US" actionOnEmptyResult="true" bargeIn="true">`;
+      twiml += `<Gather input="speech" action="${actionUrl}" method="POST" timeout="5" speechTimeout="auto" language="en-US" actionOnEmptyResult="false" bargeIn="true">`;
       twiml += '<Pause length="1"/>';
       twiml += '</Gather>';
     }
+
+    // If no speech detected, hang up to prevent loops
+    twiml += '<Say voice="alice">Thank you for calling. Goodbye.</Say>';
+    twiml += '<Hangup/>';
 
     twiml += '</Response>';
     return twiml;
@@ -137,7 +141,7 @@ class TwilioService {
     let twiml = '<?xml version="1.0" encoding="UTF-8"?><Response>';
 
     // Play the transfer message and gather preferred time
-    twiml += `<Gather input="speech" action="${actionUrl}?transfer=true" method="POST" timeout="10" speechTimeout="auto" language="en-US" actionOnEmptyResult="true" bargeIn="true">`;
+    twiml += `<Gather input="speech" action="${actionUrl}?transfer=true" method="POST" timeout="10" speechTimeout="auto" language="en-US" actionOnEmptyResult="false" bargeIn="true">`;
     twiml += `<Play>${audioUrl}</Play>`;
     twiml += '</Gather>';
 

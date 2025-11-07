@@ -242,7 +242,7 @@ async function handleAgentCall(req, res, agent) {
   try {
     const twilioData = twilioService.parseTwilioRequest(req.body);
     const isConsentResponse = req.query.consent === 'true';
-    console.log(`Call handling - Agent: ${agent.name}, From: ${twilioData.from}, CallSid: ${twilioData.callSid}, Consent: ${isConsentResponse}`);
+    console.log(`Call handling - Agent: ${agent.name}, From: ${twilioData.from}, CallSid: ${twilioData.callSid}, Consent: ${isConsentResponse}, Direction: ${twilioData.direction}`);
 
     let conversation = await Conversation.findByCallSid(twilioData.callSid);
 
@@ -290,12 +290,17 @@ async function handleAgentCall(req, res, agent) {
       }
     }
 
-    // Check if this is the first interaction (no conversation exists yet)
-    if (!conversation) {
-      console.log('First interaction, playing consent message');
-      // First interaction - play consent message
-      const twiml = twilioService.generateConsentTwiml(`${config.app.baseUrl}/api/calls/twiml/${agent.id}`);
-      return res.type('text/xml').send(twiml);
+    // For outbound calls, skip consent and go directly to conversation
+    if (conversation && (conversation.direction === 'outbound' || twilioData.direction === 'outbound')) {
+      console.log('Outbound call detected, skipping consent');
+    } else {
+      // Check if this is the first interaction for inbound calls (no conversation exists yet)
+      if (!conversation) {
+        console.log('First inbound interaction, playing consent message');
+        // First interaction - play consent message
+        const twiml = twilioService.generateConsentTwiml(`${config.app.baseUrl}/api/calls/twiml/${agent.id}`);
+        return res.type('text/xml').send(twiml);
+      }
     }
 
     let twiml;
@@ -342,9 +347,12 @@ async function handleAgentCall(req, res, agent) {
         twiml = twilioService.generateTwiml(ttsResult.url, `${config.app.baseUrl}/api/calls/twiml/${agent.id}`);
       }
     } else {
-      // This shouldn't happen in normal flow since consent comes first
-      const greeting = `Hello! This is ${agent.name}. How can I help you today?`;
-      console.log(`Sending fallback greeting: ${greeting}`);
+      // This shouldn't happen in normal flow since consent comes first for inbound calls
+      // For outbound calls, this is the initial greeting
+      const greeting = conversation && conversation.direction === 'outbound' 
+        ? `Hello! This is ${agent.name}. How can I help you today?`
+        : `Hello! This is ${agent.name}. How can I help you today?`;
+      console.log(`Sending greeting: ${greeting}`);
 
       const ttsResult = await aiService.generateTTS(greeting, agent.voice);
 

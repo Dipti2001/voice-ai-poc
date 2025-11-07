@@ -37,7 +37,7 @@ const config = {
     model: process.env.LLM_MODEL || 'openai/gpt-4o-mini', // Faster model
     maxTokens: parseInt(process.env.LLM_MAX_TOKENS) || 75, // Even more concise
     temperature: parseFloat(process.env.LLM_TEMPERATURE) || 0.6, // Slightly lower for consistency
-    timeout: parseInt(process.env.LLM_TIMEOUT) || 2500 // 2.5 seconds for faster responses
+    timeout: parseInt(process.env.LLM_TIMEOUT) || 10000 // 10 seconds for more reliable responses
   },
   app: {
     port: parseInt(process.env.PORT) || 3000,
