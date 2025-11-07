@@ -13,7 +13,7 @@ class Contact {
       tags = null
     } = contactData;
 
-    await db.getInstance().run(`
+    await db.run(`
       INSERT INTO contacts (id, name, phone_number, email, company, notes, tags)
       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [id, name, phone_number, email, company, notes, tags]
@@ -23,7 +23,7 @@ class Contact {
   }
 
   static async findById(id) {
-    return await db.getInstance().get('SELECT * FROM contacts WHERE id = ?', [id]);
+    return await db.get('SELECT * FROM contacts WHERE id = ?', [id]);
   }
 
   static async findAll(limit = 100, search = null) {
@@ -39,7 +39,7 @@ class Contact {
     query += ' ORDER BY created_at DESC LIMIT ?';
     params.push(limit);
 
-    return await db.getInstance().all(query, params);
+    return await db.all(query, params);
   }
 
   static async update(id, updates) {
@@ -47,7 +47,7 @@ class Contact {
     const values = Object.values(updates);
     const setClause = fields.map(field => `${field} = ?`).join(', ');
 
-    await db.getInstance().run(
+    await db.run(
       `UPDATE contacts SET ${setClause}, updated_at = CURRENT_TIMESTAMP WHERE id = ?`,
       [...values, id]
     );
@@ -56,23 +56,23 @@ class Contact {
   }
 
   static async delete(id) {
-    await db.getInstance().run('DELETE FROM contacts WHERE id = ?', [id]);
+    await db.run('DELETE FROM contacts WHERE id = ?', [id]);
     return true;
   }
 
   static async updateCallStats(id) {
-    await db.getInstance().run(
+    await db.run(
       'UPDATE contacts SET last_called = CURRENT_TIMESTAMP, call_count = call_count + 1 WHERE id = ?',
       [id]
     );
   }
 
   static async findByPhoneNumber(phoneNumber) {
-    return await db.getInstance().get('SELECT * FROM contacts WHERE phone_number = ?', [phoneNumber]);
+    return await db.get('SELECT * FROM contacts WHERE phone_number = ?', [phoneNumber]);
   }
 
   static async getCallHistory(limit = 50) {
-    return await db.getInstance().all(
+    return await db.all(
       'SELECT * FROM contacts WHERE last_called IS NOT NULL ORDER BY last_called DESC LIMIT ?',
       [limit]
     );

@@ -28,24 +28,24 @@ router.get('/:id', async (req, res) => {
 
 router.post('/', async (req, res) => {
   try {
-    const { name, prompt, type, phone_number, voice } = req.body;
+    const { name, prompt, type, use_case, phone_number, voice } = req.body;
 
     if (!name || !prompt) {
       return res.status(400).json({ error: 'Name and prompt are required' });
     }
 
-    const agent = await Agent.create({ name, prompt, type, phone_number, voice });
+    const agent = await Agent.create({ name, prompt, type, use_case, phone_number, voice });
     res.status(201).json(agent);
   } catch (error) {
     console.error('Error creating agent:', error);
-    res.status(500).json({ error: 'Failed to create agent' });
+    res.status(500).json({ error: `Failed to create agent: ${error.message}` });
   }
 });
 
 router.put('/:id', async (req, res) => {
   try {
-    const { name, prompt, type, phone_number, voice } = req.body;
-    const agent = await Agent.update(req.params.id, { name, prompt, type, phone_number, voice });
+    const { name, prompt, type, use_case, phone_number, voice } = req.body;
+    const agent = await Agent.update(req.params.id, { name, prompt, type, use_case, phone_number, voice });
     if (!agent) {
       return res.status(404).json({ error: 'Agent not found' });
     }

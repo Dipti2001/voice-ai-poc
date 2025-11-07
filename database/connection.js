@@ -40,13 +40,26 @@ class DatabaseConnection {
   async run(sql, params = []) {
     const db = await this.connect();
     return new Promise((resolve, reject) => {
-      db.run(sql, params, function(err) {
-        if (err) {
-          reject(err);
-        } else {
-          resolve({ lastID: this.lastID, changes: this.changes });
-        }
-      });
+      if (params.length === 0) {
+        // No params, execute SQL directly
+        db.run(sql, function(err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve({ lastID: this.lastID, changes: this.changes });
+          }
+        });
+      } else {
+        // With params
+        const args = [sql].concat(params).concat(function(err) {
+          if (err) {
+            reject(err);
+          } else {
+            resolve({ lastID: this.lastID, changes: this.changes });
+          }
+        });
+        db.run.apply(db, args);
+      }
     });
   }
 
