@@ -1,0 +1,14 @@
+const tenants = [
+  {
+    id: 'company-a',
+    name: 'Company A',
+    twilioPhone: '+1111111111',
+    voiceName: 'aura-asteria-en' // Professional female voice
+  },
+  {
+    id: 'company-b', 
+    name: 'Company B',
+    twilioPhone: '+2222222222',
+    voiceName: 'aura-luna-en' // Warm female voice
+  }
+];
